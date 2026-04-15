@@ -1,12 +1,30 @@
+# Environment Variables (Secrets) - IGNORE the real one, KEEP the example
 .env
-.backups/
+!.env.example
+
+# Python Virtual Environments
+.venv/
+venv/
+env/
+
+# Python Cache & Compiled Files
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
+
+# Database Files (SQLite)
 finance.db
 *.db-journal
 *.db-shm
 *.db-wal
+
+# Backups
+.backups/
+
+# macOS System Files
 .DS_Store
-venv/
-env/
+
+# IDE Files (Optional but recommended)
+.vscode/
+.idea/

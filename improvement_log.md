@@ -16,3 +16,6 @@ Added error handling for 404 and 500 status codes to improve user experience and
 
 ### 2026-04-15 20:06 — FRONTEND
 Added a dark mode toggle to the sidebar to allow users to switch between light and dark themes.
+
+### 2026-04-15 20:09 — FRONTEND
+Added a filter button and select menu to the transactions table, allowing users to filter transactions by category.

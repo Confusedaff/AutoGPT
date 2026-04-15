@@ -19,3 +19,6 @@ Added a dark mode toggle to the sidebar to allow users to switch between light a
 
 ### 2026-04-15 20:09 — FRONTEND
 Added a filter button and select menu to the transactions table, allowing users to filter transactions by category.
+
+### 2026-04-15 20:10 — FRONTEND
+Added a new pie chart to the transactions section to visualize the distribution of income and expenses.

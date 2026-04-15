@@ -12,8 +12,6 @@ import shutil
 import py_compile
 import subprocess
 import tempfile
-import urllib.request
-import urllib.error
 from datetime import date, datetime
 from pathlib import Path
 
@@ -27,38 +25,47 @@ BACKUP_DIR    = ".backups"
 
 
 # ──────────────────────────────────────────────
-#  Groq API Call
+#  Groq API Call  (uses requests — avoids Cloudflare 403/1010)
 # ──────────────────────────────────────────────
 
 def groq_chat(messages: list, max_tokens: int = 8192) -> str:
-    """Call Groq's free API. Returns the assistant message text."""
+    """Call Groq's free API with automatic retry/backoff. Returns the assistant message text."""
+    import requests
+
     if not GROQ_API_KEY:
         raise RuntimeError("GROQ_API_KEY not set in environment / .env file.")
 
-    payload = json.dumps({
-        "model":      MODEL,
-        "messages":   messages,
-        "max_tokens": max_tokens,
-        "temperature": 0.7,
-    }).encode()
-
-    req = urllib.request.Request(
-        GROQ_URL,
-        data    = payload,
-        headers = {
-            "Content-Type":  "application/json",
-            "Authorization": f"Bearer {GROQ_API_KEY}",
-        },
-        method = "POST"
-    )
-
-    try:
-        with urllib.request.urlopen(req, timeout=90) as resp:
-            data = json.loads(resp.read().decode())
-            return data["choices"][0]["message"]["content"].strip()
-    except urllib.error.HTTPError as e:
-        body = e.read().decode()
-        raise RuntimeError(f"Groq API error {e.code}: {body}")
+    max_retries = 4
+    for attempt in range(max_retries):
+        try:
+            response = requests.post(
+                GROQ_URL,
+                headers={
+                    "Content-Type":  "application/json",
+                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                },
+                json={
+                    "model":       MODEL,
+                    "messages":    messages,
+                    "max_tokens":  max_tokens,
+                    "temperature": 0.7,
+                },
+                timeout=120,
+            )
+            if response.status_code == 429:
+                wait = 30 * (2 ** attempt)   # 30s, 60s, 120s, 240s
+                print(f"  [groq] 429 rate-limited — retrying in {wait}s (attempt {attempt+1}/{max_retries})")
+                time.sleep(wait)
+                continue
+            response.raise_for_status()
+            return response.json()["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            if attempt == max_retries - 1:
+                raise
+            wait = 15 * (2 ** attempt)
+            print(f"  [groq] Error: {e} — retrying in {wait}s")
+            time.sleep(wait)
+    raise RuntimeError("Groq API failed after all retries")
 
 
 # ──────────────────────────────────────────────
@@ -81,7 +88,7 @@ def backup(filepath: str):
 
 def validate_python(code: str) -> tuple[bool, str]:
     """Check Python syntax without saving."""
-    with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
+    with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w", encoding="utf-8") as f:
         f.write(code)
         tmp = f.name
     try:
@@ -118,14 +125,63 @@ def strip_fences(text: str, lang: str = "") -> str:
     return text.strip()
 
 
+def robust_json_parse(raw: str) -> dict:
+    """
+    Parse JSON from an LLM response robustly.
+
+    LLMs sometimes embed literal control characters (newlines, tabs) inside
+    JSON string values instead of escaping them as \\n / \\t, which makes
+    json.loads raise 'Invalid control character'.  We fix this by scanning
+    the raw text character-by-character and escaping any bare control chars
+    that appear inside string literals.
+    """
+    # First attempt: fast path — works if the model behaved
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        pass
+
+    # Second attempt: sanitize bare control characters inside strings
+    sanitized = []
+    in_string  = False
+    escape_next = False
+    CTRL_ESCAPE = {
+        '\n': '\\n', '\r': '\\r', '\t': '\\t',
+        '\b': '\\b', '\f': '\\f',
+    }
+    for ch in raw:
+        if escape_next:
+            sanitized.append(ch)
+            escape_next = False
+        elif ch == '\\' and in_string:
+            sanitized.append(ch)
+            escape_next = True
+        elif ch == '"':
+            in_string = not in_string
+            sanitized.append(ch)
+        elif in_string and ch in CTRL_ESCAPE:
+            sanitized.append(CTRL_ESCAPE[ch])
+        else:
+            sanitized.append(ch)
+
+    try:
+        return json.loads("".join(sanitized))
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Could not parse LLM JSON response: {e}\nRaw (first 500): {raw[:500]}")
+
+
 # ──────────────────────────────────────────────
 #  Improve Backend
 # ──────────────────────────────────────────────
 
 def improve_backend(log_history: str) -> dict:
-    """Ask the LLM to improve main.py. Returns {code, changelog}."""
-    with open(BACKEND_FILE, "r") as f:
+    """Ask the LLM to improve main.py. Returns {improved_code, changelog}."""
+    with open(BACKEND_FILE, "r", encoding="utf-8") as f:
         current = f.read()
+
+    # Truncate both code and log to avoid 413 Payload Too Large
+    current      = current[:10000]
+    log_history  = log_history[-3000:]   # keep only the most recent history
 
     system = """You are an expert Python / Flask developer performing automated self-improvement.
 You receive the current backend code and improvement history, then return ONLY a JSON object — no prose, no markdown.
@@ -154,11 +210,8 @@ Return JSON only."""
         {"role": "user",   "content": user}
     ], max_tokens=8192)
 
-    # Strip any accidental markdown fences
     raw = strip_fences(raw, "json")
-
-    result = json.loads(raw)
-    return result
+    return robust_json_parse(raw)
 
 
 # ──────────────────────────────────────────────
@@ -166,9 +219,13 @@ Return JSON only."""
 # ──────────────────────────────────────────────
 
 def improve_frontend(log_history: str) -> dict:
-    """Ask the LLM to improve frontend/index.html. Returns {code, changelog}."""
-    with open(FRONTEND_FILE, "r") as f:
+    """Ask the LLM to improve frontend/index.html. Returns {improved_code, changelog}."""
+    with open(FRONTEND_FILE, "r", encoding="utf-8") as f:
         current = f.read()
+
+    # Truncate both to avoid 413 Payload Too Large
+    current     = current[:8000]
+    log_history = log_history[-3000:]
 
     system = """You are an expert frontend developer performing automated self-improvement on a dark luxury finance tracker web app.
 You receive the current HTML/CSS/JS single-file frontend and improvement history, then return ONLY a JSON object.
@@ -186,7 +243,7 @@ Rules:
 - Return ONLY the raw JSON — no backticks, no extra text"""
 
     user = f"""Current frontend code (may be truncated for context):
-{current[:18000]}
+{current}
 
 Improvement history (do not repeat these):
 {log_history}
@@ -199,25 +256,24 @@ Return JSON only."""
     ], max_tokens=8192)
 
     raw = strip_fences(raw, "json")
-    result = json.loads(raw)
-    return result
+    return robust_json_parse(raw)
 
 
 # ──────────────────────────────────────────────
-#  Log
+#  Log  (all file I/O uses utf-8)
 # ──────────────────────────────────────────────
 
 def read_log() -> str:
     if not os.path.exists(LOG_FILE):
         return "(No previous improvements)"
-    with open(LOG_FILE, "r") as f:
+    with open(LOG_FILE, "r", encoding="utf-8") as f:
         return f.read()
 
 
 def append_log(target: str, changelog: str):
     today = date.today().isoformat()
     now   = datetime.now().strftime("%H:%M")
-    with open(LOG_FILE, "a") as f:
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(f"\n### {today} {now} — {target.upper()}\n{changelog}\n")
     print(f"  [log] Appended changelog for {target}")
 
@@ -232,7 +288,7 @@ def improve(target: str = "both") -> list[str]:
     target: 'backend' | 'frontend' | 'both'
     Returns list of changelog strings.
     """
-    changelogs = []
+    changelogs  = []
     log_history = read_log()
 
     # ── Backend ──
@@ -248,7 +304,7 @@ def improve(target: str = "both") -> list[str]:
                 print(f"  [!] Python syntax error — skipping: {err}")
             else:
                 backup(BACKEND_FILE)
-                with open(BACKEND_FILE, "w") as f:
+                with open(BACKEND_FILE, "w", encoding="utf-8") as f:
                     f.write(new_code)
                 append_log("backend", note)
                 changelogs.append(f"[backend] {note}")
@@ -271,7 +327,7 @@ def improve(target: str = "both") -> list[str]:
                 print(f"  [!] HTML validation error — skipping: {err}")
             else:
                 backup(FRONTEND_FILE)
-                with open(FRONTEND_FILE, "w") as f:
+                with open(FRONTEND_FILE, "w", encoding="utf-8") as f:
                     f.write(new_code)
                 append_log("frontend", note)
                 changelogs.append(f"[frontend] {note}")

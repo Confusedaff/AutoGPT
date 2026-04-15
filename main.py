@@ -1,7 +1,3 @@
-"""
-Personal Finance Tracker - Backend (main.py)
-Self-improving Flask API with SQLite database.
-"""
 
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
@@ -121,7 +117,7 @@ def update_transaction(tid):
     if not fields:
         return jsonify({"error": "No valid fields"}), 400
 
-    set_clause = ", ".join(f"{k}=?" for k in fields)
+    set_clause = ", ".join(f"{k}=/?" for k in fields)
     values     = list(fields.values()) + [tid]
     conn       = get_db()
     conn.execute(f"UPDATE transactions SET {set_clause} WHERE id=?", values)
@@ -273,8 +269,20 @@ def delete_goal(gid):
     return jsonify({"deleted": gid})
 
 # ─────────────────────────────────────────────
-#  Serve Frontend
+#  Error Handling
+# ─────────────────────────────────────────----
+
+@app.errorhandler(404)
+def not_found(e):
+    return jsonify({"error": "Not found"}), 404
+
+@app.errorhandler(500)
+def internal_server_error(e):
+    return jsonify({"error": "Internal server error"}), 500
+
 # ─────────────────────────────────────────────
+#  Serve Frontend
+# ─────────────────────────────────────────----
 
 @app.route("/")
 def index():
@@ -282,10 +290,10 @@ def index():
 
 # ─────────────────────────────────────────────
 #  Entry Point
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────----
 
 if __name__ == "__main__":
     init_db()
     port = int(os.environ.get("PORT", 5000))
-    print(f"✦ Finance Tracker running at http://localhost:{port}")
+    print(f" Finance Tracker running at http://localhost:{port}")
     app.run(debug=True, port=port)

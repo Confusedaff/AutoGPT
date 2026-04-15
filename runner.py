@@ -164,7 +164,7 @@ def pick_commit_count(budget_remaining: int) -> int:
 def git(*args, check=True) -> subprocess.CompletedProcess:
     cmd = ["git"] + list(args)
     print(f"  $ {' '.join(cmd)}")
-    return subprocess.run(cmd, capture_output=True, text=True, check=check)
+    return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", check=check)
 
 
 def has_changes() -> bool:
@@ -267,7 +267,8 @@ def run_daily_batch(no_delay: bool = False):
         for i, _ in enumerate(fire_times, 1):
             run_one_commit(i, commit_count)
             if i < commit_count:
-                time.sleep(5)   # tiny gap between test commits
+                print("  Waiting 65s between commits (Groq rate limit)…")
+                time.sleep(65)   # Groq free tier: ~1 req/min sustained
         _save_state({"last_commit_count": commit_count, "last_run_date": str(date.today())})
         return
 

@@ -1,0 +1,12 @@
+.env
+.backups/
+__pycache__/
+*.pyc
+*.pyo
+finance.db
+*.db-journal
+*.db-shm
+*.db-wal
+.DS_Store
+venv/
+env/

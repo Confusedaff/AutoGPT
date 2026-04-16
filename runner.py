@@ -267,8 +267,8 @@ def run_daily_batch(no_delay: bool = False):
         for i, _ in enumerate(fire_times, 1):
             run_one_commit(i, commit_count)
             if i < commit_count:
-                print("  Waiting 65s between commits (Groq rate limit)...")
-                time.sleep(65)   # Groq free tier: ~1 req/min sustained
+                print("  Waiting 90s between commits (Groq rate limit)...")
+                time.sleep(90)   # Groq free tier: ~1 req/min sustained; extra buffer avoids cascading 429s
         _save_state({"last_commit_count": commit_count, "last_run_date": str(date.today())})
         return
 

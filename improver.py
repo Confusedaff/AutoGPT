@@ -1,5 +1,5 @@
 """
-improver.py — AI Self-Improvement Engine
+improver.py -- AI Self-Improvement Engine
 Uses Groq's FREE API (llama-3.3-70b-versatile) to read and improve
 both main.py (backend) and frontend/index.html, then logs changes.
 """
@@ -24,9 +24,9 @@ LOG_FILE      = "improvement_log.md"
 BACKUP_DIR    = ".backups"
 
 
-# ──────────────────────────────────────────────
-#  Groq API Call  (uses requests — avoids Cloudflare 403/1010)
-# ──────────────────────────────────────────────
+# ----------------------------------------------
+#  Groq API Call  (uses requests -- avoids Cloudflare 403/1010)
+# ----------------------------------------------
 
 def groq_chat(messages: list, max_tokens: int = 8192) -> str:
     """Call Groq's free API with automatic retry/backoff. Returns the assistant message text."""
@@ -54,7 +54,7 @@ def groq_chat(messages: list, max_tokens: int = 8192) -> str:
             )
             if response.status_code == 429:
                 wait = 30 * (2 ** attempt)   # 30s, 60s, 120s, 240s
-                print(f"  [groq] 429 rate-limited — retrying in {wait}s (attempt {attempt+1}/{max_retries})")
+                print(f"  [groq] 429 rate-limited -- retrying in {wait}s (attempt {attempt+1}/{max_retries})")
                 time.sleep(wait)
                 continue
             response.raise_for_status()
@@ -63,14 +63,14 @@ def groq_chat(messages: list, max_tokens: int = 8192) -> str:
             if attempt == max_retries - 1:
                 raise
             wait = 15 * (2 ** attempt)
-            print(f"  [groq] Error: {e} — retrying in {wait}s")
+            print(f"  [groq] Error: {e} -- retrying in {wait}s")
             time.sleep(wait)
     raise RuntimeError("Groq API failed after all retries")
 
 
-# ──────────────────────────────────────────────
+# ----------------------------------------------
 #  Backup
-# ──────────────────────────────────────────────
+# ----------------------------------------------
 
 def backup(filepath: str):
     """Save a timestamped backup before overwriting."""
@@ -79,12 +79,12 @@ def backup(filepath: str):
     name  = Path(filepath).name
     dest  = os.path.join(BACKUP_DIR, f"{stamp}_{name}")
     shutil.copy2(filepath, dest)
-    print(f"  [backup] → {dest}")
+    print(f"  [backup] -> {dest}")
 
 
-# ──────────────────────────────────────────────
+# ----------------------------------------------
 #  Syntax Validation
-# ──────────────────────────────────────────────
+# ----------------------------------------------
 
 def validate_python(code: str) -> tuple[bool, str]:
     """Check Python syntax without saving."""
@@ -109,9 +109,9 @@ def validate_html(code: str) -> tuple[bool, str]:
     return True, ""
 
 
-# ──────────────────────────────────────────────
+# ----------------------------------------------
 #  Strip markdown fences from LLM response
-# ──────────────────────────────────────────────
+# ----------------------------------------------
 
 def strip_fences(text: str, lang: str = "") -> str:
     """Remove ```lang ... ``` fences that the LLM may wrap code in."""
@@ -135,7 +135,7 @@ def robust_json_parse(raw: str) -> dict:
     the raw text character-by-character and escaping any bare control chars
     that appear inside string literals.
     """
-    # First attempt: fast path — works if the model behaved
+    # First attempt: fast path -- works if the model behaved
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
@@ -170,9 +170,9 @@ def robust_json_parse(raw: str) -> dict:
         raise ValueError(f"Could not parse LLM JSON response: {e}\nRaw (first 500): {raw[:500]}")
 
 
-# ──────────────────────────────────────────────
+# ----------------------------------------------
 #  Improve Backend
-# ──────────────────────────────────────────────
+# ----------------------------------------------
 
 def improve_backend(log_history: str) -> dict:
     """Ask the LLM to improve main.py. Returns {improved_code, changelog}."""
@@ -180,11 +180,18 @@ def improve_backend(log_history: str) -> dict:
         current = f.read()
 
     # Truncate both code and log to avoid 413 Payload Too Large
-    current      = current[:10000]
+    # Snap at a line boundary so we never hand the LLM a broken mid-string file
+    lines, length = [], 0
+    for line in current.splitlines():
+        if length + len(line) + 1 > 10000:
+            break
+        lines.append(line)
+        length += len(line) + 1
+    current      = "\n".join(lines)
     log_history  = log_history[-3000:]   # keep only the most recent history
 
     system = """You are an expert Python / Flask developer performing automated self-improvement.
-You receive the current backend code and improvement history, then return ONLY a JSON object — no prose, no markdown.
+You receive the current backend code and improvement history, then return ONLY a JSON object -- no prose, no markdown.
 The JSON must have exactly two keys:
   "improved_code": the complete updated Python file as a string
   "changelog": one sentence describing the single improvement made
@@ -195,7 +202,7 @@ Rules:
 - Keep Flask + SQLite (no external DB)
 - The code must be valid Python 3.10+
 - Do NOT add dummy data or test fixtures
-- Return ONLY the raw JSON — no backticks, no extra text"""
+- Return ONLY the raw JSON -- no backticks, no extra text"""
 
     user = f"""Current backend code:
 {current}
@@ -214,9 +221,9 @@ Return JSON only."""
     return robust_json_parse(raw)
 
 
-# ──────────────────────────────────────────────
+# ----------------------------------------------
 #  Improve Frontend
-# ──────────────────────────────────────────────
+# ----------------------------------------------
 
 def improve_frontend(log_history: str) -> dict:
     """Ask the LLM to improve frontend/index.html. Returns {improved_code, changelog}."""
@@ -224,7 +231,14 @@ def improve_frontend(log_history: str) -> dict:
         current = f.read()
 
     # Truncate both to avoid 413 Payload Too Large
-    current     = current[:8000]
+    # Snap at a line boundary so we never hand the LLM a broken mid-string file
+    lines, length = [], 0
+    for line in current.splitlines():
+        if length + len(line) + 1 > 8000:
+            break
+        lines.append(line)
+        length += len(line) + 1
+    current     = "\n".join(lines)
     log_history = log_history[-3000:]
 
     system = """You are an expert frontend developer performing automated self-improvement on a dark luxury finance tracker web app.
@@ -236,11 +250,11 @@ The JSON must have exactly two keys:
 Rules:
 - Make ONE meaningful visual or UX improvement (new chart type, animation, feature, filter, dark mode toggle, etc.)
 - Keep the dark luxury aesthetic with gold accents and DM Mono / Cormorant Garamond fonts
-- Keep Chart.js from cdnjs — no other CDN changes
+- Keep Chart.js from cdnjs -- no other CDN changes
 - API base URL stays as empty string '' (same-origin)
 - The file must be valid HTML5 with embedded CSS + JS
 - Do NOT remove existing features
-- Return ONLY the raw JSON — no backticks, no extra text"""
+- Return ONLY the raw JSON -- no backticks, no extra text"""
 
     user = f"""Current frontend code (may be truncated for context):
 {current}
@@ -259,9 +273,9 @@ Return JSON only."""
     return robust_json_parse(raw)
 
 
-# ──────────────────────────────────────────────
+# ----------------------------------------------
 #  Log  (all file I/O uses utf-8)
-# ──────────────────────────────────────────────
+# ----------------------------------------------
 
 def read_log() -> str:
     if not os.path.exists(LOG_FILE):
@@ -274,13 +288,13 @@ def append_log(target: str, changelog: str):
     today = date.today().isoformat()
     now   = datetime.now().strftime("%H:%M")
     with open(LOG_FILE, "a", encoding="utf-8") as f:
-        f.write(f"\n### {today} {now} — {target.upper()}\n{changelog}\n")
+        f.write(f"\n### {today} {now} -- {target.upper()}\n{changelog}\n")
     print(f"  [log] Appended changelog for {target}")
 
 
-# ──────────────────────────────────────────────
+# ----------------------------------------------
 #  Main improve() function
-# ──────────────────────────────────────────────
+# ----------------------------------------------
 
 def improve(target: str = "both") -> list[str]:
     """
@@ -291,9 +305,9 @@ def improve(target: str = "both") -> list[str]:
     changelogs  = []
     log_history = read_log()
 
-    # ── Backend ──
+    # -- Backend --
     if target in ("backend", "both"):
-        print("\n[improver] Improving backend (main.py)…")
+        print("\n[improver] Improving backend (main.py)...")
         try:
             result   = improve_backend(log_history)
             new_code = result["improved_code"]
@@ -301,22 +315,22 @@ def improve(target: str = "both") -> list[str]:
 
             valid, err = validate_python(new_code)
             if not valid:
-                print(f"  [!] Python syntax error — skipping: {err}")
+                print(f"  [!] Python syntax error -- skipping: {err}")
             else:
                 backup(BACKEND_FILE)
                 with open(BACKEND_FILE, "w", encoding="utf-8") as f:
                     f.write(new_code)
                 append_log("backend", note)
                 changelogs.append(f"[backend] {note}")
-                print(f"  ✓ Backend improved: {note}")
+                print(f"  OK Backend improved: {note}")
         except Exception as e:
             print(f"  [!] Backend improvement failed: {e}")
 
         time.sleep(3)   # rate-limit courtesy
 
-    # ── Frontend ──
+    # -- Frontend --
     if target in ("frontend", "both"):
-        print("\n[improver] Improving frontend (index.html)…")
+        print("\n[improver] Improving frontend (index.html)...")
         try:
             result   = improve_frontend(log_history)
             new_code = result["improved_code"]
@@ -324,14 +338,14 @@ def improve(target: str = "both") -> list[str]:
 
             valid, err = validate_html(new_code)
             if not valid:
-                print(f"  [!] HTML validation error — skipping: {err}")
+                print(f"  [!] HTML validation error -- skipping: {err}")
             else:
                 backup(FRONTEND_FILE)
                 with open(FRONTEND_FILE, "w", encoding="utf-8") as f:
                     f.write(new_code)
                 append_log("frontend", note)
                 changelogs.append(f"[frontend] {note}")
-                print(f"  ✓ Frontend improved: {note}")
+                print(f"  OK Frontend improved: {note}")
         except Exception as e:
             print(f"  [!] Frontend improvement failed: {e}")
 

@@ -1,0 +1,30 @@
+
+==========================================================
+  LEDGER Auto-Improver DAEMON — started
+  2026-04-16 19:27:09
+  Target: both  |  Max commits/day: 20
+  Monthly API cap: 300 calls
+  Press Ctrl+C to stop.
+==========================================================
+
+==========================================================
+  Starting daily batch — 2026-04-16 19:27:09
+==========================================================
+
+  API budget remaining this month: 280 calls
+  Today's commit target: 6 commits
+  Scheduled fire times: ['18:21', '18:38', '18:43', '20:49', '23:20', '23:24']
+Traceback (most recent call last):
+  File "C:\Me\Projects\Recursive_Self_Improvement\runner.py", line 371, in <module>
+    main()
+  File "C:\Me\Projects\Recursive_Self_Improvement\runner.py", line 362, in main
+    run_daily_batch(no_delay=False)
+  File "C:\Me\Projects\Recursive_Self_Improvement\runner.py", line 285, in run_daily_batch
+    success = run_one_commit(i, commit_count)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Me\Projects\Recursive_Self_Improvement\runner.py", line 193, in run_one_commit
+    print(f"\n  \u2500\u2500 Commit {commit_index}/{total} | {datetime.now():%H:%M:%S} \u2500\u2500")
+  File "C:\Users\sandi\.pyenv\pyenv-win\versions\3.11.8\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 4-5: character maps to <undefined>

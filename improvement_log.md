@@ -25,3 +25,6 @@ Added a new pie chart to the transactions section to visualize the distribution 
 
 ### 2026-04-15 20:12 — FRONTEND
 Added a line chart to visualize the net worth trend over time.
+
+### 2026-04-16 20:25 — FRONTEND
+Added a new bar chart to the dashboard to visualize the distribution of income and expenses over time.

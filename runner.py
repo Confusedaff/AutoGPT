@@ -1,17 +1,17 @@
 """
-runner.py — Persistent Daemon Scheduler + Git Auto-Commit
+runner.py -- Persistent Daemon Scheduler + Git Auto-Commit
 ==========================================================
-Start ONCE and leave running — it loops forever, sleeping between days.
+Start ONCE and leave running -- it loops forever, sleeping between days.
 
 Key behaviours
 --------------
-• Picks a random commit count each day (1–20), biased so the count
+* Picks a random commit count each day (1-20), biased so the count
   drifts up/down from the previous day's count (feels organic, not robotic).
-• Spreads commits across a 6 PM – 11:30 PM window with random gaps.
-• Hard monthly API budget: never exceeds MAX_CALLS_PER_MONTH Groq calls
+* Spreads commits across a 6 PM - 11:30 PM window with random gaps.
+* Hard monthly API budget: never exceeds MAX_CALLS_PER_MONTH Groq calls
   (tracked in .api_usage.json). Automatically skips days if budget is low.
-• No restart needed — just run `python runner.py` once and leave it.
-• Pass --no-delay to fire the first batch immediately (for testing).
+* No restart needed -- just run `python runner.py` once and leave it.
+* Pass --no-delay to fire the first batch immediately (for testing).
 """
 
 import os
@@ -23,7 +23,7 @@ import subprocess
 from datetime import datetime, date, timedelta
 from pathlib import Path
 
-# ── Load .env ──────────────────────────────────────────────────────────────
+# -- Load .env --------------------------------------------------------------
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -39,9 +39,9 @@ except ImportError:
 from improver import improve
 
 
-# ══════════════════════════════════════════════════════════════════════════════
+# ==============================================================================
 #  CONFIG
-# ══════════════════════════════════════════════════════════════════════════════
+# ==============================================================================
 
 BRANCH         = os.getenv("GIT_BRANCH", "main")
 REMOTE         = os.getenv("GIT_REMOTE", "origin")
@@ -51,15 +51,15 @@ IMPROVE_TARGET = os.getenv("IMPROVE_TARGET", "both")   # backend | frontend | bo
 MIN_COMMITS_PER_DAY = 1
 MAX_COMMITS_PER_DAY = 20
 
-# Window during which commits are spread (18:00 → 23:30)
+# Window during which commits are spread (18:00 -> 23:30)
 WINDOW_START_HOUR = 18        # 6 PM
 WINDOW_END_HOUR   = 23        # commits must START before 11:30 PM
 WINDOW_END_MINUTE = 30
 
 # Groq API budget guard
-# Groq free tier: 14 400 req/day — we cap monthly to stay safe.
+# Groq free tier: 14 400 req/day -- we cap monthly to stay safe.
 # Each improve("both") = 2 API calls. Each improve("backend"/"frontend") = 1.
-# Default cap: 300 calls/month → ~150 "both" runs → ~5 per day safely.
+# Default cap: 300 calls/month -> ~150 "both" runs -> ~5 per day safely.
 # Feel free to raise this if you upgrade your Groq plan.
 MAX_CALLS_PER_MONTH = int(os.getenv("MAX_GROQ_CALLS_MONTH", "300"))
 CALLS_PER_COMMIT    = 2 if IMPROVE_TARGET == "both" else 1
@@ -67,9 +67,9 @@ CALLS_PER_COMMIT    = 2 if IMPROVE_TARGET == "both" else 1
 USAGE_FILE = ".api_usage.json"
 
 
-# ══════════════════════════════════════════════════════════════════════════════
+# ==============================================================================
 #  API USAGE TRACKER
-# ══════════════════════════════════════════════════════════════════════════════
+# ==============================================================================
 
 def _load_usage() -> dict:
     try:
@@ -107,9 +107,9 @@ def remaining_budget() -> int:
     return max(0, MAX_CALLS_PER_MONTH - calls_this_month())
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  DAILY COMMIT COUNT — organic random walk
-# ══════════════════════════════════════════════════════════════════════════════
+# ==============================================================================
+#  DAILY COMMIT COUNT -- organic random walk
+# ==============================================================================
 
 _STATE_FILE = ".runner_state.json"
 
@@ -133,7 +133,7 @@ def _save_state(data: dict):
 def pick_commit_count(budget_remaining: int) -> int:
     """
     Pick today's commit count using a biased random walk from yesterday's count.
-    The count drifts ±30–50 % of the previous value, with a nudge toward the
+    The count drifts +/-30-50 % of the previous value, with a nudge toward the
     middle of the range so it doesn't pin at the extremes.
 
     Hard-capped by both MAX_COMMITS_PER_DAY and the remaining API budget.
@@ -141,7 +141,7 @@ def pick_commit_count(budget_remaining: int) -> int:
     state    = _load_state()
     prev     = state.get("last_commit_count", random.randint(1, 8))
 
-    # Random walk: change by ±1–3 commits, nudge toward midpoint (10)
+    # Random walk: change by +/-1-3 commits, nudge toward midpoint (10)
     midpoint = (MIN_COMMITS_PER_DAY + MAX_COMMITS_PER_DAY) / 2
     nudge    = 1 if prev < midpoint else -1
     delta    = random.randint(-3, 3) + nudge
@@ -157,9 +157,9 @@ def pick_commit_count(budget_remaining: int) -> int:
     return count
 
 
-# ══════════════════════════════════════════════════════════════════════════════
+# ==============================================================================
 #  GIT HELPERS
-# ══════════════════════════════════════════════════════════════════════════════
+# ==============================================================================
 
 def git(*args, check=True) -> subprocess.CompletedProcess:
     cmd = ["git"] + list(args)
@@ -176,21 +176,21 @@ def commit_and_push(message: str):
     git("commit", "-m", message)
     result = git("push", REMOTE, BRANCH, check=False)
     if result.returncode != 0:
-        print(f"  [!] Push failed — attempting pull-rebase…")
+        print(f"  [!] Push failed -- attempting pull-rebase...")
         git("pull", "--rebase", REMOTE, BRANCH, check=False)
         git("push", REMOTE, BRANCH)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
+# ==============================================================================
 #  SINGLE-COMMIT CYCLE
-# ══════════════════════════════════════════════════════════════════════════════
+# ==============================================================================
 
 def run_one_commit(commit_index: int, total: int) -> bool:
     """
-    Run one improvement → commit cycle.
+    Run one improvement -> commit cycle.
     Returns True if a commit was made, False otherwise.
     """
-    print(f"\n  ── Commit {commit_index}/{total} | {datetime.now():%H:%M:%S} ──")
+    print(f"\n  -- Commit {commit_index}/{total} | {datetime.now():%H:%M:%S} --")
 
     # Pull latest before improving
     try:
@@ -207,11 +207,11 @@ def run_one_commit(commit_index: int, total: int) -> bool:
         return False
 
     if not changelogs:
-        print("  No improvements made — skipping commit.")
+        print("  No improvements made -- skipping commit.")
         return False
 
     if not has_changes():
-        print("  No file changes detected — skipping commit.")
+        print("  No file changes detected -- skipping commit.")
         return False
 
     today   = datetime.now().strftime("%Y-%m-%d")
@@ -221,20 +221,20 @@ def run_one_commit(commit_index: int, total: int) -> bool:
     print(f"\n  Committing: {msg}")
     try:
         commit_and_push(msg)
-        print("  ✦ Pushed to GitHub!")
+        print("  * Pushed to GitHub!")
         return True
     except Exception as e:
         print(f"  [!] Git push failed: {e}")
         return False
 
 
-# ══════════════════════════════════════════════════════════════════════════════
+# ==============================================================================
 #  DAILY BATCH
-# ══════════════════════════════════════════════════════════════════════════════
+# ==============================================================================
 
 def run_daily_batch(no_delay: bool = False):
     """
-    Execute today's batch of commits spread across the 6–11:30 PM window.
+    Execute today's batch of commits spread across the 6-11:30 PM window.
     """
     budget = remaining_budget()
     print(f"\n  API budget remaining this month: {budget} calls")
@@ -242,7 +242,7 @@ def run_daily_batch(no_delay: bool = False):
     commit_count = pick_commit_count(budget)
 
     if commit_count == 0:
-        print("  ⚠ API budget exhausted for this month — skipping today.")
+        print("  (!) API budget exhausted for this month -- skipping today.")
         return
 
     print(f"  Today's commit target: {commit_count} commits")
@@ -267,7 +267,7 @@ def run_daily_batch(no_delay: bool = False):
         for i, _ in enumerate(fire_times, 1):
             run_one_commit(i, commit_count)
             if i < commit_count:
-                print("  Waiting 65s between commits (Groq rate limit)…")
+                print("  Waiting 65s between commits (Groq rate limit)...")
                 time.sleep(65)   # Groq free tier: ~1 req/min sustained
         _save_state({"last_commit_count": commit_count, "last_run_date": str(date.today())})
         return
@@ -279,20 +279,20 @@ def run_daily_batch(no_delay: bool = False):
             wait = (fire_at - now).total_seconds()
             h, remainder = divmod(int(wait), 3600)
             m = remainder // 60
-            print(f"\n  Waiting {h}h {m}m until {fire_at:%H:%M} for commit {i}/{commit_count}…")
+            print(f"\n  Waiting {h}h {m}m until {fire_at:%H:%M} for commit {i}/{commit_count}...")
             time.sleep(wait)
 
         success = run_one_commit(i, commit_count)
         if success:
             commits_made += 1
 
-    print(f"\n  ✦ Day complete — {commits_made}/{commit_count} commits pushed.")
+    print(f"\n  * Day complete -- {commits_made}/{commit_count} commits pushed.")
     _save_state({"last_commit_count": commit_count, "last_run_date": str(date.today())})
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  MAIN LOOP — runs forever, wakes at 6 PM each day
-# ══════════════════════════════════════════════════════════════════════════════
+# ==============================================================================
+#  MAIN LOOP -- runs forever, wakes at 6 PM each day
+# ==============================================================================
 
 def seconds_until_next_window() -> float:
     """Seconds until 6 PM today (or tomorrow if already past 11:30 PM)."""
@@ -305,7 +305,7 @@ def seconds_until_next_window() -> float:
     elif now <= today_end:
         return 0   # we're inside the window right now
     else:
-        # Past the window — sleep until 6 PM tomorrow
+        # Past the window -- sleep until 6 PM tomorrow
         tomorrow_start = today_start + timedelta(days=1)
         return (tomorrow_start - now).total_seconds()
 
@@ -314,7 +314,7 @@ def main():
     no_delay = "--no-delay" in sys.argv or os.getenv("SKIP_DELAY", "").lower() == "true"
 
     print("\n" + "=" * 58)
-    print("  LEDGER Auto-Improver DAEMON — started")
+    print("  LEDGER Auto-Improver DAEMON -- started")
     print(f"  {datetime.now():%Y-%m-%d %H:%M:%S}")
     print(f"  Target: {IMPROVE_TARGET}  |  Max commits/day: {MAX_COMMITS_PER_DAY}")
     print(f"  Monthly API cap: {MAX_CALLS_PER_MONTH} calls")
@@ -322,12 +322,12 @@ def main():
     print("=" * 58)
 
     if no_delay:
-        print("\n  --no-delay: firing first batch immediately…")
+        print("\n  --no-delay: firing first batch immediately...")
         run_daily_batch(no_delay=True)
         print("\n  Test run complete. Exiting.")
         return
 
-    # ── Infinite daily loop ────────────────────────────────────────────────
+    # -- Infinite daily loop ------------------------------------------------
     last_run_date = _load_state().get("last_run_date")
 
     while True:
@@ -337,12 +337,12 @@ def main():
         if last_run_date == today_str:
             wait = seconds_until_next_window()
             if wait == 0:
-                # Edge case: still inside window but already ran — sleep to tomorrow
+                # Edge case: still inside window but already ran -- sleep to tomorrow
                 wait = seconds_until_next_window() + 60  # force past window end
                 tomorrow = datetime.now() + timedelta(seconds=wait)
                 h, rem = divmod(int(wait), 3600)
                 m = rem // 60
-                print(f"\n  Already ran today. Sleeping {h}h {m}m until {tomorrow:%Y-%m-%d %H:%M}…")
+                print(f"\n  Already ran today. Sleeping {h}h {m}m until {tomorrow:%Y-%m-%d %H:%M}...")
                 time.sleep(wait)
                 last_run_date = None
                 continue
@@ -352,12 +352,12 @@ def main():
             wake_at = datetime.now() + timedelta(seconds=wait)
             h, rem  = divmod(int(wait), 3600)
             m        = rem // 60
-            print(f"\n  Sleeping {h}h {m}m until window opens at {wake_at:%Y-%m-%d %H:%M}…")
+            print(f"\n  Sleeping {h}h {m}m until window opens at {wake_at:%Y-%m-%d %H:%M}...")
             time.sleep(wait)
 
         # Run today's batch
         print(f"\n{'='*58}")
-        print(f"  Starting daily batch — {datetime.now():%Y-%m-%d %H:%M:%S}")
+        print(f"  Starting daily batch -- {datetime.now():%Y-%m-%d %H:%M:%S}")
         print(f"{'='*58}")
         run_daily_batch(no_delay=False)
         last_run_date = today_str

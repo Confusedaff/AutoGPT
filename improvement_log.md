@@ -37,3 +37,6 @@ Added a radar chart to the dashboard to visualize the distribution of income, ex
 
 ### 2026-04-16 20:32 — FRONTEND
 A polar area chart has been added to the dashboard page to visualize the distribution of income and expenses across different categories.
+
+### 2026-04-16 20:34 — FRONTEND
+A new doughnut chart has been added to visualize the distribution of income, expenses, and savings.

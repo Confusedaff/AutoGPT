@@ -31,3 +31,6 @@ Added a new bar chart to the dashboard to visualize the distribution of income a
 
 ### 2026-04-16 20:28 — FRONTEND
 Added a scatter chart to the dashboard to visualize the correlation between income and expenses over time.
+
+### 2026-04-16 20:30 — FRONTEND
+Added a radar chart to the dashboard to visualize the distribution of income, expenses, net worth, and savings.

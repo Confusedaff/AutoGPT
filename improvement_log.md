@@ -34,3 +34,6 @@ Added a scatter chart to the dashboard to visualize the correlation between inco
 
 ### 2026-04-16 20:30 — FRONTEND
 Added a radar chart to the dashboard to visualize the distribution of income, expenses, net worth, and savings.
+
+### 2026-04-16 20:32 — FRONTEND
+A polar area chart has been added to the dashboard page to visualize the distribution of income and expenses across different categories.

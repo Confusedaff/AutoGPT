@@ -28,3 +28,6 @@ Added a line chart to visualize the net worth trend over time.
 
 ### 2026-04-16 20:25 — FRONTEND
 Added a new bar chart to the dashboard to visualize the distribution of income and expenses over time.
+
+### 2026-04-16 20:28 — FRONTEND
+Added a scatter chart to the dashboard to visualize the correlation between income and expenses over time.

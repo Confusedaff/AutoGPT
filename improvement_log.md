@@ -40,3 +40,6 @@ A polar area chart has been added to the dashboard page to visualize the distrib
 
 ### 2026-04-16 20:34 — FRONTEND
 A new doughnut chart has been added to visualize the distribution of income, expenses, and savings.
+
+### 2026-04-17 19:00 -- FRONTEND
+Added a new bubble chart to visualize the correlation between income, expenses, and net worth over time.

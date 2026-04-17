@@ -43,3 +43,9 @@ A new doughnut chart has been added to visualize the distribution of income, exp
 
 ### 2026-04-17 19:00 -- FRONTEND
 Added a new bubble chart to visualize the correlation between income, expenses, and net worth over time.
+
+### 2026-04-17 19:19 -- BACKEND
+Added a new endpoint /api/average_spending to calculate the average spending for a given month.
+
+### 2026-04-17 19:20 -- FRONTEND
+Added a new bubble chart to visualize the correlation between income, expenses, and net worth over time.

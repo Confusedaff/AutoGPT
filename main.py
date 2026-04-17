@@ -117,7 +117,7 @@ def update_transaction(tid):
     if not fields:
         return jsonify({"error": "No valid fields"}), 400
 
-    set_clause = ", ".join(f"{k}=/?" for k in fields)
+    set_clause = ", ".join(f"{k}=?" for k in fields)
     values     = list(fields.values()) + [tid]
     conn       = get_db()
     conn.execute(f"UPDATE transactions SET {set_clause} WHERE id=?", values)
@@ -172,6 +172,21 @@ def get_summary():
         "daily":       [dict(r) for r in daily],
     })
 
+@app.route("/api/average_spending", methods=["GET"])
+def get_average_spending():
+    month = request.args.get("month", datetime.now().strftime("%Y-%m"))
+    conn  = get_db()
+
+    average_spending = conn.execute(
+        "SELECT AVG(amount) FROM transactions WHERE type='expense' AND strftime('%Y-%m',date)=?",
+        (month,)
+    ).fetchone()[0]
+
+    conn.close()
+    return jsonify({
+        "month":       month,
+        "average_spending": round(average_spending, 2) if average_spending is not None else 0,
+    })
 
 @app.route("/api/trends", methods=["GET"])
 def get_trends():
@@ -190,7 +205,7 @@ def get_trends():
 
 # ─────────────────────────────────────────────
 #  Budgets
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────----
 
 @app.route("/api/budgets", methods=["GET"])
 def get_budgets():
@@ -225,7 +240,7 @@ def set_budget():
 
 # ─────────────────────────────────────────────
 #  Savings Goals
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────----
 
 @app.route("/api/goals", methods=["GET"])
 def get_goals():

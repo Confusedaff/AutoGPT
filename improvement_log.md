@@ -49,3 +49,9 @@ Added a new endpoint /api/average_spending to calculate the average spending for
 
 ### 2026-04-17 19:20 -- FRONTEND
 Added a new bubble chart to visualize the correlation between income, expenses, and net worth over time.
+
+### 2026-04-17 19:36 -- BACKEND
+Added a new endpoint /api/top_expenses to retrieve the top 10 expense categories for a given month.
+
+### 2026-04-17 19:38 -- FRONTEND
+Added a hover animation to the charts to improve user experience and provide a more interactive visual representation of the data.

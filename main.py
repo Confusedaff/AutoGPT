@@ -1,4 +1,3 @@
-
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import sqlite3
@@ -81,7 +80,6 @@ def get_transactions():
     conn.close()
     return jsonify([dict(r) for r in rows])
 
-
 @app.route("/api/transactions", methods=["POST"])
 def add_transaction():
     data = request.json
@@ -100,7 +98,6 @@ def add_transaction():
     conn.close()
     return jsonify(dict(row)), 201
 
-
 @app.route("/api/transactions/<int:tid>", methods=["DELETE"])
 def delete_transaction(tid):
     conn = get_db()
@@ -109,7 +106,6 @@ def delete_transaction(tid):
     conn.close()
     return jsonify({"deleted": tid})
 
-
 @app.route("/api/transactions/<int:tid>", methods=["PUT"])
 def update_transaction(tid):
     data = request.json
@@ -117,7 +113,7 @@ def update_transaction(tid):
     if not fields:
         return jsonify({"error": "No valid fields"}), 400
 
-    set_clause = ", ".join(f"{k}=?" for k in fields)
+    set_clause = ", ".join(f"{k}= ?" for k in fields)
     values     = list(fields.values()) + [tid]
     conn       = get_db()
     conn.execute(f"UPDATE transactions SET {set_clause} WHERE id=?", values)
@@ -203,6 +199,17 @@ def get_trends():
     conn.close()
     return jsonify([dict(r) for r in reversed(rows)])
 
+@app.route("/api/top_expenses", methods=["GET"])
+def get_top_expenses():
+    month = request.args.get("month", datetime.now().strftime("%Y-%m"))
+    conn  = get_db()
+    rows = conn.execute(
+        "SELECT category, SUM(amount) as total FROM transactions WHERE type='expense' AND strftime('%Y-%m', date)=? GROUP BY category ORDER BY total DESC LIMIT 10",
+        (month,)
+    ).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
 # ─────────────────────────────────────────────
 #  Budgets
 # ─────────────────────────────────────────----
@@ -223,7 +230,6 @@ def get_budgets():
 
     conn.close()
     return jsonify(result)
-
 
 @app.route("/api/budgets", methods=["POST"])
 def set_budget():
@@ -249,7 +255,6 @@ def get_goals():
     conn.close()
     return jsonify([dict(r) for r in rows])
 
-
 @app.route("/api/goals", methods=["POST"])
 def add_goal():
     data = request.json
@@ -263,7 +268,6 @@ def add_goal():
     conn.close()
     return jsonify(dict(row)), 201
 
-
 @app.route("/api/goals/<int:gid>", methods=["PUT"])
 def update_goal(gid):
     data = request.json
@@ -273,7 +277,6 @@ def update_goal(gid):
     row  = conn.execute("SELECT * FROM savings_goals WHERE id=?", (gid,)).fetchone()
     conn.close()
     return jsonify(dict(row))
-
 
 @app.route("/api/goals/<int:gid>", methods=["DELETE"])
 def delete_goal(gid):
@@ -310,5 +313,4 @@ def index():
 if __name__ == "__main__":
     init_db()
     port = int(os.environ.get("PORT", 5000))
-    print(f" Finance Tracker running at http://localhost:{port}")
-    app.run(debug=True, port=port)
+    app.run(host='0.0.0.0', port=port)

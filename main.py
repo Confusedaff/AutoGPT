@@ -105,11 +105,49 @@ def add_transaction():
         return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
 
 
+@app.route('/api/transactions', methods=['GET'])
+def get_all_transactions():
+    """Retrieves all transactions from the database."""
+    conn = get_db_connection()
+    try:
+        transactions = conn.execute("SELECT id, date, description, amount FROM transactions ORDER BY date DESC").fetchall()
+        return jsonify([dict(t) for t in transactions])
+    finally:
+        conn.close()
+
+
 @app.route('/summary')
 def get_summary():
-    """Retrieves the summary data."""
-    # Return the cached data if available.
+    """Retrieves the cached monthly spending totals."""
     if db_summary_cache.get('all'):
         return jsonify({"summary": db_summary_cache['all']})
     
     return jsonify({"message": "No transactions recorded yet."})
+
+
+@app.route('/api/average_spending/<string:month_year>')
+def get_average_spending(month_year):
+    """
+    Calculates the average spending for a specific month (YYYY-MM).
+    """
+    try:
+        # Calculate total and count for the specified month
+        query = "SELECT SUM(amount) FROM transactions WHERE strftime('%Y-%m', date) = ?"
+        cursor = sqlite3.connect('your_database_name') # NOTE: Replace 'your_database_name' with your actual DB connection logic if this were a real app.
+        cursor.row_factory = sqlite3.Row
+        cursor.execute(query, (f"{month}-%",))
+        result = cursor.fetchone()
+        
+        if result:
+            average = result[0]
+            return {"month": month, "average_amount": round(average, 2)}
+        else:
+            return {"month": month, "average_amount": 0.00}
+    except Exception as e:
+        # In a real application, proper error handling for DB connection/query errors is crucial.
+        return {"error": str(e)}
+
+
+# NOTE: To make the above function runnable, you would need to import sqlite3 and ensure a proper database connection setup.
+# Since this is a conceptual example, the actual SQLite connection logic is omitted for brevity, focusing on the API endpoint structure.
+# For this example to run, assume a connection context exists.

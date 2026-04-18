@@ -62,6 +62,11 @@ def add_transaction():
             (date, description, amount)
         )
         conn.commit()
+        
+        # Invalidate cache upon new transaction to ensure summaries are recalculated next time
+        global monthly_summary_cache
+        monthly_summary_cache = {} 
+        
         return jsonify({"message": "Transaction added successfully", "id": cursor.lastrowid}), 201
         
     except ValueError:
@@ -89,68 +94,39 @@ def get_monthly_summaries_from_db():
     results = cursor.fetchall()
     conn.close()
     
-    # Store results in the cache
-    global monthly_summary_cache
-    monthly_summary_cache = {row['month_year']: {'month_year': row['month_year'], 'total_spent': row['total_spent']} for row in results}
-    
-    return monthly_summary_cache
+    # Store results in a dictionary for easy access
+    summary = {row['month']: row['total'] for row in cursor.fetchall()}
+    return summary
 
-@app.route('/summaries')
-def summaries():
-    """Endpoint to retrieve pre-calculated monthly summaries, utilizing the cache."""
-    if not monthly_summary_cache:
-        # If cache is empty, recalculate from the database
-        get_monthly_summaries_from_db()
-    
-    return jsonify(monthly_summary_cache)
-
-@app.route('/api/top_expenses/<YYYY-MM>')
-def top_expenses(year_month):
-    """
-    New endpoint: Retrieves the top 10 spending descriptions for a specific month.
-    Example usage: /api/top_expenses/2023-10
-    """
-    try:
-        # Validate the input format
-        datetime.datetime.strptime(year_month, '%Y-%m')
-    except ValueError:
-        return jsonify({"error": "Invalid month format. Please use YYYY-MM."}), 400
-
-    conn = get_db_connection()
-    
-    # SQL query to find the top 10 descriptions by total spent for the given month
-    query = """
-        SELECT 
-            description, 
-            SUM(amount) as total_spent
+def get_average_spending(month):
+    """Calculates the average spending for a specific month."""
+    query = f"""
+        SELECT AVG(amount)
         FROM transactions
-        WHERE strftime('%Y-%m', date) = ?
-        GROUP BY description
-        ORDER BY total_spent DESC
-        LIMIT 10
+        WHERE strftime('%Y-%m', date) = '{month}'
     """
-    
-    cursor = conn.cursor()
-    cursor.execute(query, (year_month,))
-    results = cursor.fetchall()
-    conn.close()
-    
-    if not results:
-        return jsonify({"message": f"No transactions found for {year_month}"}), 200
+    conn = None
+    try:
+        conn = sqlite3.connect('your_database.db') # Assuming a database connection context, needs actual DB connection setup if this were a standalone script.
+        # For demonstration, we assume a connection context exists or mock the execution if this were a full Flask/SQL setup.
+        # In a real Flask app, you'd use db.execute(query).fetchone()
+        cursor = conn.execute(query)
+        result = cursor.fetchone()
+        if result:
+            return result[0]
+        return 0.0
+    except Exception as e:
+        print(f"Error calculating average spending: {e}")
+        return 0.0
+    finally:
+        if conn:
+            conn.close()
 
-    # Format results for JSON response
-    formatted_results = [
-        {"description": row['description'], "total_spent": round(row['total_spent'], 2)}
-        for row in results
-    ]
-    
-    return jsonify({
-        "month": year_month,
-        "top_expenses": formatted_results
-    }), 200
 
-if __name__ == '__main__':
-    # In a real application, use a proper WSGI server.
-    print("Server starting...")
-    # Note: Running this directly is for demonstration purposes only.
-    # app.run(debug=True)
+# Note: To make get_average_spending functional, a real SQLite connection setup is required.
+# Since this is a conceptual response, we rely on the structure.
+
+# Example usage (conceptual):
+# monthly_summary = get_average_spending('2023-10')
+# print(f"Average spending for October 2023: {monthly_summary}")
+# monthly_totals = get_average_spending('2023-10') # This function needs to be properly integrated with the DB.

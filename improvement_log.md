@@ -55,3 +55,6 @@ Added a new endpoint /api/top_expenses to retrieve the top 10 expense categories
 
 ### 2026-04-17 19:38 -- FRONTEND
 Added a hover animation to the charts to improve user experience and provide a more interactive visual representation of the data.
+
+### 2026-04-18 12:16 -- BACKEND
+

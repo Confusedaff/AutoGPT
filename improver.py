@@ -3,7 +3,13 @@ improver.py -- AI Self-Improvement Engine
 Primary:  Local Ollama (gemma4:e2b or any model you have pulled)
 Fallback: Groq API (llama-3.3-70b-versatile) if Ollama is unavailable
 
-Set LLM_PROVIDER=groq in .env to force Groq.
+Strategy: TWO-STEP approach to avoid JSON-wrapping failures with local models.
+  Step 1 -- ask for ONLY the improved code inside a code fence
+  Step 2 -- ask for ONLY the one-line changelog
+This is far more reliable than asking local models to produce valid JSON
+with a multi-thousand-character escaped string inside it.
+
+Set LLM_PROVIDER=groq  in .env to force Groq.
 Set OLLAMA_MODEL=gemma4:e2b (or llama3.2:latest, etc.) to choose model.
 """
 
@@ -13,143 +19,140 @@ import json
 import time
 import shutil
 import py_compile
-import subprocess
 import tempfile
 from datetime import date, datetime
 from pathlib import Path
 
-# ── Provider config ──────────────────────────────────────────────────────────
-LLM_PROVIDER   = os.getenv("LLM_PROVIDER", "ollama").lower()   # "ollama" | "groq"
-OLLAMA_URL     = os.getenv("OLLAMA_URL", "http://localhost:11434/api/chat")
-OLLAMA_MODEL   = os.getenv("OLLAMA_MODEL", "gemma4:e2b")        # change to llama3.2:latest etc.
-GROQ_API_KEY   = os.getenv("GROQ_API_KEY", "")
-GROQ_URL       = "https://api.groq.com/openai/v1/chat/completions"
-GROQ_MODEL     = "llama-3.3-70b-versatile"
+# ── Provider config ───────────────────────────────────────────────────────────
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama").lower()   # "ollama" | "groq"
+OLLAMA_URL   = os.getenv("OLLAMA_URL",   "http://localhost:11434/api/chat")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma4:e2b")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_URL     = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MODEL   = "llama-3.3-70b-versatile"
 
-BACKEND_FILE   = "main.py"
-FRONTEND_FILE  = os.path.join("frontend", "index.html")
-LOG_FILE       = "improvement_log.md"
-BACKUP_DIR     = ".backups"
+BACKEND_FILE  = "main.py"
+FRONTEND_FILE = os.path.join("frontend", "index.html")
+LOG_FILE      = "improvement_log.md"
+BACKUP_DIR    = ".backups"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  LLM Calls
+#  LLM providers
 # ─────────────────────────────────────────────────────────────────────────────
 
 def ollama_chat(messages: list, max_tokens: int = 8192) -> str:
-    """
-    Call a local Ollama model. No rate limits, no API key.
-    Ollama must be running: `ollama serve`
-    Model must be pulled:   `ollama pull gemma4:e2b`
-    """
+    """Call local Ollama. No rate limits, no key needed."""
     import requests
-
     payload = {
         "model":    OLLAMA_MODEL,
         "messages": messages,
         "stream":   False,
-        "options": {
-            "num_predict": max_tokens,
-            "temperature": 0.7,
-        },
+        "options":  {"num_predict": max_tokens, "temperature": 0.4},
     }
-
     try:
         resp = requests.post(OLLAMA_URL, json=payload, timeout=300)
         resp.raise_for_status()
-        data = resp.json()
-        # Ollama /api/chat response: {"message": {"role": "assistant", "content": "..."}}
-        return data["message"]["content"].strip()
+        return resp.json()["message"]["content"].strip()
     except requests.exceptions.ConnectionError:
         raise RuntimeError(
-            f"Ollama is not running or not reachable at {OLLAMA_URL}.\n"
-            "Start it with: ollama serve\n"
-            f"Pull the model with: ollama pull {OLLAMA_MODEL}"
+            f"Ollama not reachable at {OLLAMA_URL}. "
+            f"Run: ollama serve && ollama pull {OLLAMA_MODEL}"
         )
 
 
 def groq_chat(messages: list, max_tokens: int = 8192) -> str:
-    """Call Groq's free API with automatic retry/backoff."""
+    """Call Groq with retry/backoff."""
     import requests
-
     if not GROQ_API_KEY:
-        raise RuntimeError("GROQ_API_KEY not set in environment / .env file.")
-
-    max_retries = 4
-    for attempt in range(max_retries):
+        raise RuntimeError("GROQ_API_KEY not set.")
+    for attempt in range(4):
         try:
-            response = requests.post(
+            r = requests.post(
                 GROQ_URL,
-                headers={
-                    "Content-Type":  "application/json",
-                    "Authorization": f"Bearer {GROQ_API_KEY}",
-                },
-                json={
-                    "model":       GROQ_MODEL,
-                    "messages":    messages,
-                    "max_tokens":  max_tokens,
-                    "temperature": 0.7,
-                },
+                headers={"Content-Type": "application/json",
+                         "Authorization": f"Bearer {GROQ_API_KEY}"},
+                json={"model": GROQ_MODEL, "messages": messages,
+                      "max_tokens": max_tokens, "temperature": 0.4},
                 timeout=120,
             )
-            if response.status_code == 429:
+            if r.status_code == 429:
                 wait = 30 * (2 ** attempt)
-                print(f"  [groq] 429 rate-limited -- retrying in {wait}s (attempt {attempt+1}/{max_retries})")
+                print(f"  [groq] 429 -- retrying in {wait}s")
                 time.sleep(wait)
                 continue
-            response.raise_for_status()
-            return response.json()["choices"][0]["message"]["content"].strip()
+            r.raise_for_status()
+            return r.json()["choices"][0]["message"]["content"].strip()
         except Exception as e:
-            if attempt == max_retries - 1:
+            if attempt == 3:
                 raise
             wait = 15 * (2 ** attempt)
             print(f"  [groq] Error: {e} -- retrying in {wait}s")
             time.sleep(wait)
-    raise RuntimeError("Groq API failed after all retries")
+    raise RuntimeError("Groq failed after all retries")
 
 
 def llm_chat(messages: list, max_tokens: int = 8192) -> str:
-    """
-    Route to the right provider.
-    If Ollama is the primary but fails, automatically falls back to Groq.
-    """
+    """Route to correct provider, fall back to Groq if Ollama fails."""
     if LLM_PROVIDER == "groq":
-        print(f"  [llm] Using Groq ({GROQ_MODEL})")
+        print(f"  [llm] Groq ({GROQ_MODEL})")
         return groq_chat(messages, max_tokens)
-
-    # Default: Ollama
-    print(f"  [llm] Using Ollama ({OLLAMA_MODEL})")
+    print(f"  [llm] Ollama ({OLLAMA_MODEL})")
     try:
         return ollama_chat(messages, max_tokens)
     except RuntimeError as e:
         if GROQ_API_KEY:
-            print(f"  [llm] Ollama failed: {e}")
-            print(f"  [llm] Falling back to Groq ({GROQ_MODEL})...")
+            print(f"  [llm] Ollama failed ({e}) -- falling back to Groq")
             return groq_chat(messages, max_tokens)
         raise
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Backup
+#  Code extraction helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+def extract_code_fence(text: str, lang: str = "") -> str:
+    """
+    Pull the first fenced code block out of an LLM response.
+    Tries  ```lang ... ```  first, then any  ``` ... ```.
+    Falls back to stripping fence lines and returning the body.
+    """
+    if lang:
+        m = re.search(rf"```{lang}\s*\n(.*?)```", text, re.DOTALL | re.IGNORECASE)
+        if m:
+            return m.group(1).strip()
+    m = re.search(r"```[a-z]*\s*\n(.*?)```", text, re.DOTALL)
+    if m:
+        return m.group(1).strip()
+    # No fences -- strip any stray backtick lines
+    lines = [l for l in text.splitlines() if not l.strip().startswith("```")]
+    return "\n".join(lines).strip()
+
+
+def extract_first_sentence(text: str) -> str:
+    """Return the first meaningful line as the changelog entry."""
+    for line in text.splitlines():
+        line = line.strip(" \t\r\n*-#`")
+        if line and len(line) > 5:
+            return line[:300]
+    return text.strip()[:300]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Validation & backup
 # ─────────────────────────────────────────────────────────────────────────────
 
 def backup(filepath: str):
-    """Save a timestamped backup before overwriting."""
     Path(BACKUP_DIR).mkdir(exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    name  = Path(filepath).name
-    dest  = os.path.join(BACKUP_DIR, f"{stamp}_{name}")
+    dest  = os.path.join(BACKUP_DIR, f"{stamp}_{Path(filepath).name}")
     shutil.copy2(filepath, dest)
     print(f"  [backup] -> {dest}")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Syntax Validation
-# ─────────────────────────────────────────────────────────────────────────────
-
 def validate_python(code: str) -> tuple[bool, str]:
-    """Check Python syntax without saving."""
-    with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w", encoding="utf-8") as f:
+    with tempfile.NamedTemporaryFile(suffix=".py", delete=False,
+                                     mode="w", encoding="utf-8") as f:
         f.write(code)
         tmp = f.name
     try:
@@ -162,198 +165,10 @@ def validate_python(code: str) -> tuple[bool, str]:
 
 
 def validate_html(code: str) -> tuple[bool, str]:
-    """Basic HTML sanity checks."""
-    checks = ["<!DOCTYPE html>", "<html", "</html>", "<body", "</body>"]
-    for c in checks:
-        if c.lower() not in code.lower():
-            return False, f"Missing expected tag: {c}"
+    for tag in ["<!DOCTYPE html>", "<html", "</html>", "<body", "</body>"]:
+        if tag.lower() not in code.lower():
+            return False, f"Missing tag: {tag}"
     return True, ""
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  Response Parsing Helpers
-# ─────────────────────────────────────────────────────────────────────────────
-
-def strip_fences(text: str, lang: str = "") -> str:
-    """Remove ```lang ... ``` fences that the LLM may wrap code in."""
-    pattern = rf"```{lang}\s*(.*?)```"
-    m = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
-    if m:
-        return m.group(1).strip()
-    text = re.sub(r"^```[a-z]*\n?", "", text.strip())
-    text = re.sub(r"\n?```$", "", text.strip())
-    return text.strip()
-
-
-def extract_json_object(text: str) -> str:
-    """
-    Find the first {...} JSON object in the text.
-    Useful when a model emits a preamble before the JSON.
-    """
-    start = text.find("{")
-    if start == -1:
-        return text
-    depth, in_str, escape = 0, False, False
-    for i, ch in enumerate(text[start:], start):
-        if escape:
-            escape = False
-            continue
-        if ch == "\\" and in_str:
-            escape = True
-            continue
-        if ch == '"':
-            in_str = not in_str
-        elif not in_str:
-            if ch == "{":
-                depth += 1
-            elif ch == "}":
-                depth -= 1
-                if depth == 0:
-                    return text[start:i + 1]
-    return text[start:]   # unterminated -- return what we have and let the parser complain
-
-
-def robust_json_parse(raw: str) -> dict:
-    """
-    Parse JSON from an LLM response robustly.
-    Handles: preamble text, markdown fences, bare control characters in strings.
-    """
-    # Step 1: fast path
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
-        pass
-
-    # Step 2: extract the JSON object if the model added preamble/postamble
-    candidate = extract_json_object(raw)
-    try:
-        return json.loads(candidate)
-    except json.JSONDecodeError:
-        pass
-
-    # Step 3: sanitize bare control characters inside JSON strings
-    sanitized = []
-    in_string  = False
-    escape_next = False
-    CTRL_ESCAPE = {"\n": "\\n", "\r": "\\r", "\t": "\\t", "\b": "\\b", "\f": "\\f"}
-    for ch in candidate:
-        if escape_next:
-            sanitized.append(ch)
-            escape_next = False
-        elif ch == "\\" and in_string:
-            sanitized.append(ch)
-            escape_next = True
-        elif ch == '"':
-            in_string = not in_string
-            sanitized.append(ch)
-        elif in_string and ch in CTRL_ESCAPE:
-            sanitized.append(CTRL_ESCAPE[ch])
-        else:
-            sanitized.append(ch)
-
-    try:
-        return json.loads("".join(sanitized))
-    except json.JSONDecodeError as e:
-        raise ValueError(
-            f"Could not parse LLM JSON response: {e}\n"
-            f"Raw (first 500 chars): {raw[:500]}"
-        )
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  Improve Backend
-# ─────────────────────────────────────────────────────────────────────────────
-
-def improve_backend(log_history: str) -> dict:
-    """Ask the LLM to improve main.py. Returns {improved_code, changelog}."""
-    with open(BACKEND_FILE, "r", encoding="utf-8") as f:
-        current = f.read()
-
-    # Truncate to avoid context-window overflows (important for smaller local models)
-    lines, length = [], 0
-    for line in current.splitlines():
-        if length + len(line) + 1 > 10_000:
-            break
-        lines.append(line)
-        length += len(line) + 1
-    current     = "\n".join(lines)
-    log_history = log_history[-3000:]
-
-    system = (
-        "You are an expert Python / Flask developer performing automated self-improvement.\n"
-        "You receive the current backend code and improvement history, then return ONLY a JSON object -- no prose, no markdown.\n"
-        'The JSON must have exactly two keys:\n'
-        '  "improved_code": the complete updated Python file as a string\n'
-        '  "changelog": one sentence describing the single improvement made\n\n'
-        "Rules:\n"
-        "- Make ONE meaningful improvement per run (new endpoint, better error handling, new analytics feature, caching, etc.)\n"
-        "- Do NOT break existing API contracts\n"
-        "- Keep Flask + SQLite (no external DB)\n"
-        "- The code must be valid Python 3.10+\n"
-        "- Do NOT add dummy data or test fixtures\n"
-        "- Return ONLY the raw JSON -- no backticks, no extra text"
-    )
-
-    user = (
-        f"Current backend code:\n{current}\n\n"
-        f"Improvement history (do not repeat these):\n{log_history}\n\n"
-        "Return JSON only."
-    )
-
-    raw = llm_chat(
-        [{"role": "system", "content": system}, {"role": "user", "content": user}],
-        max_tokens=8192,
-    )
-    raw = strip_fences(raw, "json")
-    return robust_json_parse(raw)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  Improve Frontend
-# ─────────────────────────────────────────────────────────────────────────────
-
-def improve_frontend(log_history: str) -> dict:
-    """Ask the LLM to improve frontend/index.html. Returns {improved_code, changelog}."""
-    with open(FRONTEND_FILE, "r", encoding="utf-8") as f:
-        current = f.read()
-
-    lines, length = [], 0
-    for line in current.splitlines():
-        if length + len(line) + 1 > 8_000:
-            break
-        lines.append(line)
-        length += len(line) + 1
-    current     = "\n".join(lines)
-    log_history = log_history[-3000:]
-
-    system = (
-        "You are an expert frontend developer performing automated self-improvement on a dark luxury finance tracker web app.\n"
-        "You receive the current HTML/CSS/JS single-file frontend and improvement history, then return ONLY a JSON object.\n"
-        'The JSON must have exactly two keys:\n'
-        '  "improved_code": the complete updated HTML file as a string\n'
-        '  "changelog": one sentence describing the single improvement made\n\n'
-        "Rules:\n"
-        "- Make ONE meaningful visual or UX improvement (new chart type, animation, feature, filter, dark mode toggle, etc.)\n"
-        "- Keep the dark luxury aesthetic with gold accents and DM Mono / Cormorant Garamond fonts\n"
-        "- Keep Chart.js from cdnjs -- no other CDN changes\n"
-        "- API base URL stays as empty string '' (same-origin)\n"
-        "- The file must be valid HTML5 with embedded CSS + JS\n"
-        "- Do NOT remove existing features\n"
-        "- Return ONLY the raw JSON -- no backticks, no extra text"
-    )
-
-    user = (
-        f"Current frontend code (may be truncated for context):\n{current}\n\n"
-        f"Improvement history (do not repeat these):\n{log_history}\n\n"
-        "Return JSON only."
-    )
-
-    raw = llm_chat(
-        [{"role": "system", "content": system}, {"role": "user", "content": user}],
-        max_tokens=8192,
-    )
-    raw = strip_fences(raw, "json")
-    return robust_json_parse(raw)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -376,7 +191,118 @@ def append_log(target: str, changelog: str):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Main improve() entry point
+#  Two-step improvement: code first, changelog second
+# ─────────────────────────────────────────────────────────────────────────────
+
+def two_step_improve(
+    current_code: str,
+    log_history:  str,
+    file_type:    str,
+    system_code:  str,
+    max_tokens:   int = 8192,
+) -> dict:
+    """
+    Step 1: get improved code inside a fenced block (no JSON wrapper).
+    Step 2: get a one-line changelog in a follow-up message.
+    Returns {"improved_code": str, "changelog": str}
+    """
+    # ── Step 1: improved code ─────────────────────────────────────────────────
+    user_code = (
+        f"Current code:\n```{file_type}\n{current_code}\n```\n\n"
+        f"Previous improvements (do not repeat):\n{log_history}\n\n"
+        f"Return the complete improved {file_type} file inside a single "
+        f"```{file_type} ... ``` block. No explanation, no extra text."
+    )
+    raw_code = llm_chat(
+        [{"role": "system", "content": system_code},
+         {"role": "user",   "content": user_code}],
+        max_tokens=max_tokens,
+    )
+    improved_code = extract_code_fence(raw_code, file_type)
+
+    # ── Step 2: changelog ─────────────────────────────────────────────────────
+    user_log = (
+        "In ONE sentence (max 20 words), describe the single improvement you just made. "
+        "No bullet points, no preamble. Sentence only."
+    )
+    raw_log = llm_chat(
+        [{"role": "system",    "content": "You are a concise technical writer."},
+         {"role": "user",      "content": user_code},
+         {"role": "assistant", "content": raw_code},
+         {"role": "user",      "content": user_log}],
+        max_tokens=80,
+    )
+    changelog = extract_first_sentence(raw_log)
+
+    return {"improved_code": improved_code, "changelog": changelog}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Improve Backend
+# ─────────────────────────────────────────────────────────────────────────────
+
+def improve_backend(log_history: str) -> dict:
+    with open(BACKEND_FILE, "r", encoding="utf-8") as f:
+        current = f.read()
+
+    lines, length = [], 0
+    for line in current.splitlines():
+        if length + len(line) + 1 > 10_000:
+            break
+        lines.append(line)
+        length += len(line) + 1
+    current     = "\n".join(lines)
+    log_history = log_history[-3000:]
+
+    system_code = (
+        "You are an expert Python / Flask developer.\n"
+        "Make ONE meaningful improvement to the Flask backend "
+        "(new endpoint, better error handling, analytics, input validation, caching, etc.).\n"
+        "Rules:\n"
+        "- Do NOT break existing API contracts\n"
+        "- Keep Flask + SQLite only (no external DB)\n"
+        "- Valid Python 3.10+\n"
+        "- No dummy or test data\n"
+        "- Return the COMPLETE updated Python file in a ```python ... ``` block. Nothing else."
+    )
+    return two_step_improve(current, log_history, "python", system_code)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Improve Frontend
+# ─────────────────────────────────────────────────────────────────────────────
+
+def improve_frontend(log_history: str) -> dict:
+    with open(FRONTEND_FILE, "r", encoding="utf-8") as f:
+        current = f.read()
+
+    lines, length = [], 0
+    for line in current.splitlines():
+        if length + len(line) + 1 > 8_000:
+            break
+        lines.append(line)
+        length += len(line) + 1
+    current     = "\n".join(lines)
+    log_history = log_history[-3000:]
+
+    system_code = (
+        "You are an expert frontend developer improving a dark luxury finance tracker.\n"
+        "Make ONE meaningful visual or UX improvement "
+        "(new chart, animation, filter, summary card, tooltip, responsive fix, etc.).\n"
+        "Rules:\n"
+        "- Dark luxury aesthetic: background #1a1a1a, gold #ffd700 accents, "
+        "DM Mono / Cormorant Garamond fonts\n"
+        "- Chart.js from cdnjs only -- no new CDN libraries\n"
+        "- API base URL stays '' (same-origin)\n"
+        "- Valid HTML5 with all CSS + JS embedded in one file\n"
+        "- Do NOT remove any existing features\n"
+        "- Return the COMPLETE updated HTML file in a ```html ... ``` block. Nothing else."
+    )
+    return two_step_improve(current, log_history, "html", system_code)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Main entry point
 # ─────────────────────────────────────────────────────────────────────────────
 
 def improve(target: str = "both") -> list[str]:
@@ -388,14 +314,12 @@ def improve(target: str = "both") -> list[str]:
     changelogs  = []
     log_history = read_log()
 
-    # -- Backend --
     if target in ("backend", "both"):
         print("\n[improver] Improving backend (main.py)...")
         try:
             result   = improve_backend(log_history)
             new_code = result["improved_code"]
             note     = result["changelog"]
-
             valid, err = validate_python(new_code)
             if not valid:
                 print(f"  [!] Python syntax error -- skipping: {err}")
@@ -405,22 +329,19 @@ def improve(target: str = "both") -> list[str]:
                     f.write(new_code)
                 append_log("backend", note)
                 changelogs.append(f"[backend] {note}")
-                print(f"  OK Backend improved: {note}")
+                print(f"  OK: {note}")
         except Exception as e:
             print(f"  [!] Backend improvement failed: {e}")
 
-        # Small pause -- only needed for Groq rate limits; harmless for Ollama
         if LLM_PROVIDER == "groq":
             time.sleep(3)
 
-    # -- Frontend --
     if target in ("frontend", "both"):
         print("\n[improver] Improving frontend (index.html)...")
         try:
             result   = improve_frontend(log_history)
             new_code = result["improved_code"]
             note     = result["changelog"]
-
             valid, err = validate_html(new_code)
             if not valid:
                 print(f"  [!] HTML validation error -- skipping: {err}")
@@ -430,7 +351,7 @@ def improve(target: str = "both") -> list[str]:
                     f.write(new_code)
                 append_log("frontend", note)
                 changelogs.append(f"[frontend] {note}")
-                print(f"  OK Frontend improved: {note}")
+                print(f"  OK: {note}")
         except Exception as e:
             print(f"  [!] Frontend improvement failed: {e}")
 

@@ -70,22 +70,74 @@ get_monthly_average_spending_from_db()
 @app.route('/api/summary/<string:month>')
 def get_summary(month):
     """Endpoint to retrieve summary data for a specific month."""
-    # In a real application, you would fetch data from a proper database.
-    # For this example, we simulate fetching based on the pre-calculated data.
     
-    # Since we only pre-calculated the full set, we'll return a placeholder
-    # or simulate a lookup if the data was stored differently.
+    # Retrieve all summary data from the cache
+    all_summaries = db_summary_cache.get('all', [])
     
-    # For demonstration, we'll return a generic success message.
-    return {"month": month, "status": "Data retrieval simulated"}
+    # Filter for the specific month
+    for summary in all_summaries:
+        if summary['month'] == month:
+            return jsonify({
+                "month": summary['month'],
+                "total_spent": summary['total'],
+                "status": "Success"
+            })
+            
+    return jsonify({"error": f"Summary data for month {month} not found."}), 404
 
 @app.route('/api/summary')
 def get_all_summary():
     """Endpoint to retrieve all pre-calculated summary data."""
-    # In a real application, you would load the results from a persistent store.
-    return {"message": "Full summary data is available in the backend."}
+    if 'all' in db_summary_cache:
+        return jsonify({
+            "message": "Full summary data retrieved successfully.",
+            "data": db_summary_cache['all']
+        })
+    return jsonify({"message": "No summary data available."})
 
-@app.route('/api/top_level')
-def get_top_level():
-    """Endpoint to retrieve the overall summary."""
-    return get_all_summary()
+@app.route('/api/average_spending/<string:month>')
+def get_average_spending(month):
+    """Endpoint to retrieve the average spending for a specific month."""
+    
+    averages = db_summary_cache.get('averages', [])
+    
+    for avg in averages:
+        if avg['month'] == month:
+            return jsonify({
+                "month": avg['month'],
+                "average_spending": avg['average']
+            })
+            
+    return jsonify({"error": f"Average spending data for month {month} not found."}), 404
+
+@app.route('/api/top_expenses/<string:month>')
+def get_top_expenses(month):
+    """Endpoint to retrieve the top 10 expense categories for a given month."""
+    
+    # Note: The current database structure only stores transactions (date, description, amount), 
+    # not categories explicitly. To fulfill this request meaningfully, we must aggregate 
+    # based on descriptions or assume a category mechanism exists. 
+    # Since we cannot introduce a new table, we will simulate finding the top expenses 
+    # by grouping transactions for the month.
+    
+    conn = get_db_connection()
+    try:
+        # Group transactions by description (as a proxy for category) and sum amounts
+        cursor = conn.execute(
+            "SELECT description, SUM(amount) as total FROM transactions WHERE strftime('%Y-%m', date) = ? GROUP BY description ORDER BY total DESC LIMIT 10",
+            (month,)
+        )
+        top_expenses = cursor.fetchall()
+        
+        if not top_expenses:
+            return jsonify({"message": f"No expense data found for {month}."})
+            
+        return jsonify({
+            "month": month,
+            "top_expenses": [
+                {"description": item['description'], "total": item['total']}
+                for item in top_expenses
+            ]
+        })
+    finally:
+        conn.close()

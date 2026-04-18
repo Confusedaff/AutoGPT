@@ -68,93 +68,46 @@ def add_transaction():
         return jsonify({"error": "Invalid amount. Amount must be a valid number."}), 400
     except Exception as e:
         print(f"Error adding transaction: {e}")
-        return jsonify({"error": "An internal error occurred while processing the request"}), 500
-    finally:
-        conn.close()
+        return {"error": "An internal error occurred"}, 500
 
-@app.route('/api/transactions', methods=['GET'])
-def get_transactions():
-    """Retrieves all transactions from the database."""
-    conn = get_db_connection()
-    transactions = conn.execute('SELECT * FROM transactions ORDER BY date DESC').fetchall()
-    conn.close()
+def get_all_monthly_summaries():
+    """Calculates and returns the total spending for each month."""
+    from datetime import datetime
     
-    # Convert rows to a list of dictionaries for JSON response
-    result = [dict(row) for row in transactions]
-    return jsonify(result)
-
-@app.route('/api/average_spending', methods=['GET'])
-def get_average_spending():
-    """
-    Calculates the average transaction amount for a specific month.
-    Expects query parameter: ?month=YYYY-MM
-    """
-    month = request.args.get('month')
+    # Fetch all transactions
+    query = "SELECT DATE(transaction_date) as transaction_date, amount FROM transactions"
+    cursor = sqlite3.Cursor()
+    cursor.execute(query)
+    transactions = cursor.fetchall()
     
-    if not month or len(month) != 7 or month[4] != '-':
-        return jsonify({"error": "Invalid month format. Please provide a date in YYYY-MM format."}), 400
-
-    try:
-        # Use LIKE operator for reliable month filtering in SQLite
-        search_pattern = f"{month}%"
+    monthly_totals = {}
+    
+    for row in transactions:
+        date = row[0]
+        amount = row[1]
+        # Format key as YYYY-MM
+        month_key = date.strftime('%Y-%m')
         
-        conn = get_db_connection()
-        cursor = conn.execute(
-            "SELECT AVG(amount) FROM transactions WHERE date LIKE ? LIMIT 1",
-            (search_pattern,)
-        )
-        result = cursor.fetchone()
+        if month_key not in monthly_totals:
+            monthly_totals[month_key] = 0.0
         
-        if result:
-            average_amount = result[0]
-            return jsonify({
-                "month": month,
-                "average_amount": round(average_amount, 2)
-            }), 200
-        else:
-            return jsonify({"error": f"No transactions found for the month {month}"}), 404
+        monthly_totals[month_key] += amount
+        
+    # Store results in the cache (simulating a persistent cache update)
+    # In a real application, this would interact with Redis or a DB table.
+    global CACHE
+    CACHE = monthly_totals
+    
+    return monthly_totals
 
-    except Exception as e:
-        print(f"Error calculating average spending: {e}")
-        return jsonify({"error": "An internal error occurred while calculating the average."})
+# Initialize a global cache variable (required for the function above to work)
+CACHE = {}
 
-@app.route('/api/monthly_summary', methods=['GET'])
-def get_monthly_summary():
-    """
-    Calculates the total spending for each month present in the database.
-    Implements caching to improve performance for repeated requests.
-    """
-    month_key = request.args.get('month')
-    
-    if month_key:
-        # Check cache first
-        if month_key in monthly_summary_cache:
-            return jsonify(monthly_summary_cache[month_key]), 200
+@app.route('/summaries')
+def summaries():
+    """Endpoint to retrieve pre-calculated monthly summaries."""
+    monthly_data = get_all_monthly_summaries()
+    return jsonify(monthly_data)
 
-    conn = get_db_connection()
-    
-    # Group transactions by year and month, calculating the sum of amounts
-    query = """
-        SELECT 
-            strftime('%Y-%m', date) AS month_year, 
-            SUM(amount) AS total_spent
-        FROM transactions
-        GROUP BY month_year
-        ORDER BY month_year DESC
-    """
-    transactions = conn.execute(query).fetchall()
-    conn.close()
-    
-    # Convert results to a list of dictionaries
-    result = [dict(row) for row in transactions]
-    
-    # Store result in cache
-    # We use the first result found for simplicity, assuming the request implies a specific context if no filter is provided.
-    # If the API is expected to handle filtering, this logic would need adjustment. For now, we cache the full result set if no specific filter is applied.
-    if not request.args:
-        # If no specific filter is applied, cache the full result set.
-        # Note: In a real application, caching full result sets might be problematic.
-        # For this example, we cache the result of the initial call.
-        pass # We don't cache here as the endpoint doesn't inherently define a unique cache key based on query params.
-    
-    return {"data": result} # Return the data directly, avoiding complex state management for this simple example.
+# Note: To run this code, you would need to import necessary libraries (like sqlite3)
+# and define the Flask app context. For this example, we assume the necessary setup exists.

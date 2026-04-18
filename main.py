@@ -94,7 +94,6 @@ def get_average_spending():
 
     try:
         # Use LIKE operator for reliable month filtering in SQLite
-        # We check if the date starts with the requested YYYY-MM string
         search_pattern = f"{month}%"
         
         conn = get_db_connection()
@@ -116,3 +115,27 @@ def get_average_spending():
     except Exception as e:
         print(f"Error calculating average spending: {e}")
         return jsonify({"error": "An internal error occurred while calculating the average."})
+
+@app.route('/api/monthly_summary', methods=['GET'])
+def get_monthly_summary():
+    """
+    Calculates the total spending for each month present in the database.
+    Returns a list of dictionaries, one for each month.
+    """
+    conn = get_db_connection()
+    
+    # Group transactions by year and month, calculating the sum of amounts
+    query = """
+        SELECT 
+            strftime('%Y-%m', date) AS month_year, 
+            SUM(amount) AS total_spent
+        FROM transactions
+        GROUP BY month_year
+        ORDER BY month_year DESC
+    """
+    transactions = conn.execute(query).fetchall()
+    conn.close()
+    
+    # Convert results to a list of dictionaries
+    result = [dict(row) for row in transactions]
+    return jsonify(result)

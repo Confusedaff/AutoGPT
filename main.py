@@ -67,41 +67,49 @@ def add_transaction():
 
         # 2. Validate date format (YYYY-MM-DD)
         if not isinstance(date, str) or len(date) != 10:
-            return {"error": "Invalid date format. Please use YYYY-MM-DD."}
+            return jsonify({"error": "Invalid date format. Please use YYYY-MM-DD."}), 400
         
-        # Basic date validation (optional but good practice)
-        import datetime
+        # Basic date validation
         datetime.datetime.strptime(date, '%Y-%m-%d')
 
-        # Insert into DB (Placeholder for actual DB interaction)
-        # In a real app, this would involve a database call.
-        # For this example, we simulate success.
+        # 3. Insert into DB
+        conn = get_db_connection()
+        cursor = conn.execute(
+            "INSERT INTO transactions (date, description, amount) VALUES (?, ?, ?)",
+            (date, description, amount)
+        )
+        conn.commit()
+        conn.close()
+
+        # 4. Update in-memory cache based on the new entry
+        # Extract YYYY-MM from the date
+        month_key = date[:7]
         
-        # Update in-memory cache (simulating persistence)
-        # In a real application, this would be a database transaction.
+        if month_key not in monthly_summary_cache:
+            monthly_summary_cache[month_key] = {'month_year': month_key, 'total_spent': 0.0}
         
-        # Simulate cache update based on the new entry (this is highly simplified)
-        # A real implementation would query the DB for the current month's total.
+        # Update the total spent for that month
+        monthly_summary_cache[month_key]['total_spent'] += amount
         
-        return {"message": "Transaction recorded successfully.", "date": date}
+        return jsonify({
+            "message": "Transaction recorded successfully.", 
+            "date": date,
+            "month_summary_updated": monthly_summary_cache[month_key]
+        }), 201
 
     except ValueError as e:
-        return {"error": f"Date validation failed: {e}"}
+        return jsonify({"error": f"Date validation failed: {e}"}), 400
+    except sqlite3.Error as e:
+        return jsonify({"error": f"Database error occurred: {str(e)}"}), 500
     except Exception as e:
-        return {"error": f"An unexpected error occurred: {str(e)}"}
+        return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
 
 
 @app.route('/summary')
 def get_summary():
     """Retrieves the summary data."""
-    # In a real application, we would query the database.
-    # Here, we return the cached data if available.
+    # Return the cached data if available.
+    if db_summary_cache.get('all'):
+        return jsonify({"summary": db_summary_cache['all']})
     
-    # Since we are simulating, we return a placeholder.
-    if not hasattr(app, 'transaction_cache'):
-        return {"message": "No transactions recorded yet."}
-        
-    return {"summary": "Data retrieval simulated. Check POST endpoint for new entries."}
-
-# Note: To run this, you would need to define 'app' and handle the POST request properly.
-# The provided code structure is conceptual, focusing on the logic flow requested.
+    return jsonify({"message": "No transactions recorded yet."})

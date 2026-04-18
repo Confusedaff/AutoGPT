@@ -116,3 +116,48 @@ def add_transaction():
         return jsonify({"error": f"Database error: {str(e)}"}), 500
     finally:
         conn.close()
+
+@app.route('/api/top_expenses/<string:month_year>', methods=['GET'])
+def get_top_expenses(month_year):
+    """
+    Retrieves the top 10 expense categories for a specific month.
+    Expects month_year in 'YYYY-MM' format.
+    """
+    if not month_year:
+        return jsonify({"error": "Month year must be provided"}), 400
+
+    conn = get_db_connection()
+    query = """
+    SELECT 
+        T1.description, 
+        SUM(T1.amount) as total_spent
+    FROM transactions AS T1
+    WHERE strftime('%Y-%m', T1.date) = ?
+    GROUP BY T1.description
+    ORDER BY total_spent DESC
+    LIMIT 10;
+    """
+    try:
+        cursor = conn.execute(query, (month_year,))
+        results = cursor.fetchall()
+        
+        # Format results for JSON response
+        output = []
+        for desc, total in results:
+            output.append({
+                "description": desc,
+                "total_spent": f"{total:.2f}"
+            })
+            
+        return {"month_year": month_year, "top_spending": output}
+    except Exception as e:
+        return {"error": str(e)}
+    finally:
+        conn.close()
+
+# Helper function definition (assuming a connection mechanism exists, defined here for completeness)
+def get_db_connection():
+    # Placeholder for actual database connection logic
+    import sqlite3
+    conn = sqlite3.connect('finance.db')
+    return conn

@@ -70,44 +70,41 @@ def add_transaction():
         print(f"Error adding transaction: {e}")
         return {"error": "An internal error occurred"}, 500
 
-def get_all_monthly_summaries():
-    """Calculates and returns the total spending for each month."""
-    from datetime import datetime
+def get_monthly_summaries_from_db():
+    """Calculates monthly spending totals directly from the database using SQL aggregation."""
+    conn = get_db_connection()
     
-    # Fetch all transactions
-    query = "SELECT DATE(transaction_date) as transaction_date, amount FROM transactions"
-    cursor = sqlite3.Cursor()
+    # SQL query to group by year and month and sum the amounts
+    query = """
+        SELECT 
+            strftime('%Y-%m', date) as month_year, 
+            SUM(amount) as total_spent
+        FROM transactions
+        GROUP BY month_year
+        ORDER BY month_year DESC
+    """
+    
+    cursor = conn.cursor()
     cursor.execute(query)
-    transactions = cursor.fetchall()
+    results = cursor.fetchall()
+    conn.close()
     
-    monthly_totals = {}
+    # Store results in the cache
+    global monthly_summary_cache
+    monthly_summary_cache = {row['month_year']: {'month_year': row['month_year'], 'total_spent': row['total_spent']} for row in results}
     
-    for row in transactions:
-        date = row[0]
-        amount = row[1]
-        # Format key as YYYY-MM
-        month_key = date.strftime('%Y-%m')
-        
-        if month_key not in monthly_totals:
-            monthly_totals[month_key] = 0.0
-        
-        monthly_totals[month_key] += amount
-        
-    # Store results in the cache (simulating a persistent cache update)
-    # In a real application, this would interact with Redis or a DB table.
-    global CACHE
-    CACHE = monthly_totals
-    
-    return monthly_totals
-
-# Initialize a global cache variable (required for the function above to work)
-CACHE = {}
+    return monthly_summary_cache
 
 @app.route('/summaries')
 def summaries():
-    """Endpoint to retrieve pre-calculated monthly summaries."""
-    monthly_data = get_all_monthly_summaries()
-    return jsonify(monthly_data)
+    """Endpoint to retrieve pre-calculated monthly summaries, utilizing the cache."""
+    if not monthly_summary_cache:
+        # If cache is empty, recalculate from the database
+        get_monthly_summaries_from_db()
+    
+    return jsonify(monthly_summary_cache)
 
-# Note: To run this code, you would need to import necessary libraries (like sqlite3)
-# and define the Flask app context. For this example, we assume the necessary setup exists.
+if __name__ == '__main__':
+    # In a production environment, use a proper WSGI server.
+    # For this example, we run the Flask app.
+    app.run(debug=True)

@@ -49,6 +49,14 @@ def add_transaction():
         if not date or len(date) != 10 or date[4] != '-' or date[7] != '-':
             return jsonify({"error": "Invalid date format. Please use YYYY-MM-DD."}), 400
 
+        # Basic check for date validity (e.g., ensuring month/day are plausible, though full date validation is complex)
+        import datetime
+        try:
+            datetime.datetime.strptime(date, '%Y-%m-%d')
+        except ValueError:
+            return jsonify({"error": "Invalid date provided. Please ensure the date is a real calendar date."}), 400
+
+
         # 3. Insert into the database
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -77,6 +85,44 @@ def get_transactions():
     # Convert rows to a list of dictionaries for JSON response
     result = [dict(row) for row in transactions]
     return jsonify(result)
+
+@app.route('/api/average_spending', methods=['GET'])
+def get_average_spending():
+    """
+    Calculates the average transaction amount for a specific month.
+    Expects query parameter: ?month=YYYY-MM
+    """
+    month = request.args.get('month')
+    
+    if not month or len(month) != 7 or month[4] != '-':
+        return jsonify({"error": "Invalid month format. Please provide a date in YYYY-MM format."}), 400
+
+    try:
+        # Extract YYYY-MM part
+        year_month = month[:7]
+        
+        conn = get_db_connection()
+        # Calculate the average amount for transactions in the specified month
+        cursor = conn.execute(
+            "SELECT AVG(amount) FROM transactions WHERE date LIKE ? || '%' AND date LIKE ? || '%'",
+            (f"{year_month}%", f"{year_month}%")
+        )
+        result = cursor.fetchone()
+        
+        if result:
+            average_amount = result[0]
+            return jsonify({
+                "month": year_month,
+                "average_amount": round(average_amount, 2)
+            }), 200
+        else:
+            return jsonify({"error": f"No transactions found for the month {year_month}"}), 404
+
+    except Exception as e:
+        print(f"Error calculating average spending: {e}")
+        return jsonify({"error": "An internal error occurred while calculating average spending"}), 500
+    finally:
+        conn.close()
 
 if __name__ == '__main__':
     # Run the Flask application

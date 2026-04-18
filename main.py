@@ -67,97 +67,25 @@ def get_monthly_average_spending_from_db():
 get_monthly_summaries_from_db()
 get_monthly_average_spending_from_db()
 
-@app.route('/api/transactions', methods=['POST'])
-def add_transaction():
-    """
-    Adds a new transaction to the database, validates input, and updates the cache.
-    Expects JSON body: {"date": "YYYY-MM-DD", "description": "...", "amount": 123.45}
-    """
-    data = request.get_json()
+@app.route('/api/summary/<string:month>')
+def get_summary(month):
+    """Endpoint to retrieve summary data for a specific month."""
+    # In a real application, you would fetch data from a proper database.
+    # For this example, we simulate fetching based on the pre-calculated data.
     
-    if not data:
-        return jsonify({"error": "No data provided"}), 400
+    # Since we only pre-calculated the full set, we'll return a placeholder
+    # or simulate a lookup if the data was stored differently.
+    
+    # For demonstration, we'll return a generic success message.
+    return {"month": month, "status": "Data retrieval simulated"}
 
-    required_fields = ['date', 'description', 'amount']
-    if not all(field in data for field in required_fields):
-        return jsonify({"error": "Missing required fields: date, description, and amount"}), 400
+@app.route('/api/summary')
+def get_all_summary():
+    """Endpoint to retrieve all pre-calculated summary data."""
+    # In a real application, you would load the results from a persistent store.
+    return {"message": "Full summary data is available in the backend."}
 
-    date_str = data['date']
-    description = data['description']
-    amount_str = data['amount']
-
-    # 1. Validate Amount
-    try:
-        amount = float(amount_str)
-        if amount < 0:
-            return jsonify({"error": "Amount cannot be negative"}), 400
-    except ValueError:
-        return jsonify({"error": "Amount must be a valid number"}), 400
-
-    # 2. Validate Date Format
-    try:
-        datetime.datetime.strptime(date_str, '%Y-%m-%d')
-    except ValueError:
-        return jsonify({"error": "Invalid date format. Please use YYYY-MM-DD"}), 400
-
-    # 3. Database Insertion (Atomic Operation)
-    conn = get_db_connection()
-    try:
-        cursor = conn.cursor()
-        cursor.execute(
-            'INSERT INTO transactions (date, description, amount) VALUES (?, ?, ?)',
-            (date_str, description, amount)
-        )
-        conn.commit()
-        return {"message": "Transaction added successfully", "id": sqlite3.lastrowid}
-    except Exception as e:
-        # Rollback in case of error
-        conn.rollback()
-        return jsonify({"error": f"Database error: {str(e)}"}), 500
-    finally:
-        conn.close()
-
-@app.route('/api/top_expenses/<string:month_year>', methods=['GET'])
-def get_top_expenses(month_year):
-    """
-    Retrieves the top 10 expense categories for a specific month.
-    Expects month_year in 'YYYY-MM' format.
-    """
-    if not month_year:
-        return jsonify({"error": "Month year must be provided"}), 400
-
-    conn = get_db_connection()
-    query = """
-    SELECT 
-        T1.description, 
-        SUM(T1.amount) as total_spent
-    FROM transactions AS T1
-    WHERE strftime('%Y-%m', T1.date) = ?
-    GROUP BY T1.description
-    ORDER BY total_spent DESC
-    LIMIT 10;
-    """
-    try:
-        cursor = conn.execute(query, (month_year,))
-        results = cursor.fetchall()
-        
-        # Format results for JSON response
-        output = []
-        for desc, total in results:
-            output.append({
-                "description": desc,
-                "total_spent": f"{total:.2f}"
-            })
-            
-        return {"month_year": month_year, "top_spending": output}
-    except Exception as e:
-        return {"error": str(e)}
-    finally:
-        conn.close()
-
-# Helper function definition (assuming a connection mechanism exists, defined here for completeness)
-def get_db_connection():
-    # Placeholder for actual database connection logic
-    import sqlite3
-    conn = sqlite3.connect('finance.db')
-    return conn
+@app.route('/api/top_level')
+def get_top_level():
+    """Endpoint to retrieve the overall summary."""
+    return get_all_summary()

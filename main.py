@@ -59,104 +59,50 @@ def add_transaction():
     """
     data = request.get_json()
     
-    # 1. Check for required fields
-    if not data or 'date' not in data or 'description' not in data or 'amount' not in data:
-        return jsonify({"error": "Missing required fields"}), 400
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
 
-    try:
-        amount = float(request.json['amount'])
-    except ValueError:
-        return {"error": "Amount must be a valid number"}, 400
+    required_fields = ['date', 'description', 'amount']
+    if not all(field in data for field in required_fields):
+        return jsonify({"error": "Missing required fields: date, description, and amount"}), 400
 
+    date_str = data['date']
+    description = data['description']
+    amount_str = data['amount']
+
+    # 1. Validate Amount
     try:
-        # Ensure amount is positive for spending context, or handle as is
+        amount = float(amount_str)
         if amount < 0:
-            return {"error": "Amount cannot be negative"}, 400
-    except:
-        return {"error": "Invalid amount provided"}, 400
-
-    try:
-        # Attempt to parse date (assuming ISO format or standard format)
-        date_str = request.json['date']
-        # Simple date validation (can be expanded for robustness)
-        datetime.strptime(date_str, '%Y-%m-%d')
+            return jsonify({"error": "Amount cannot be negative"}), 400
     except ValueError:
-        return {"error": "Invalid date format. Use YYYY-MM-DD."}, 400
+        return jsonify({"error": "Amount must be a valid number"}), 400
 
-
+    # 2. Validate Date Format
     try:
-        # Re-parsing the request data for consistency if needed, assuming input is JSON
-        amount = float(request.json['amount'])
-        date_str = request.json['date']
-    except Exception as e:
-        return {"error": f"Data parsing error: {str(e)}"}, 400
-
-
-    try:
-        # Re-attempting the core logic with validated data
-        amount = float(request.json['amount'])
-        date_str = request.json['date']
-        
-        # In a real application, you would use a database transaction here.
-        # For this example, we simulate success.
-        pass 
-
-    except Exception as e:
-        return {"error": f"Transaction failed: {str(e)}"}, 500
-
-
-    return {"message": "Transaction recorded successfully", "amount": amount, "date": date_str}, 201
-
-
-import json
-import datetime
-import sys
-
-# --- Mocking the Flask/Request environment for standalone testing ---
-# In a real Flask app, request.json would be available.
-def mock_request(data):
-    """Simulates the request.json object."""
-    return data
-
-def handle_transaction(request_data):
-    """Simulates the endpoint logic."""
-    print(f"Received request: {request_data}")
-    
-    try:
-        amount = float(request_data.get('amount'))
-        date_str = request_data.get('date')
-        
-        if not amount or not date_str:
-            return {"error": "Missing amount or date"}, 400
-            
-        # Basic validation
         datetime.datetime.strptime(date_str, '%Y-%m-%d')
-        
-        # Simulate successful storage
-        return {"message": "Transaction recorded successfully", "amount": amount, "date": date_str}, 201
-        
     except ValueError:
-        return {"error": "Invalid data type provided"}, 400
-    except ValueError as e:
-        return {"error": str(e)}, 400
+        return jsonify({"error": "Invalid date format. Please use YYYY-MM-DD"}), 400
+
+    # 3. Database Insertion (Atomic Operation)
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            'INSERT INTO transactions (date, description, amount) VALUES (?, ?, ?)',
+            (date_str, description, amount)
+        )
+        conn.commit()
+        return {"message": "Transaction added successfully", "id": sqlite3.lastrowid}
     except Exception as e:
-        return {"error": f"An unexpected error occurred: {str(e)}"}, 500
+        # Rollback in case of error
+        conn.rollback()
+        return {"error": f"Database error: {str(e)}"}
+    finally:
+        conn.close()
 
-# --- Example Usage ---
 if __name__ == '__main__':
-    print("--- Testing Transaction Endpoint ---")
-    
-    # Test Case 1: Valid data
-    valid_request = {"amount": 150.75, "date": "2023-10-27"}
-    result1 = handle_transaction(valid_request)
-    print(f"Result 1: {result1}\n")
-
-    # Test Case 2: Invalid date format
-    invalid_date_request = {"amount": 100.00, "date": "27/10/2023"}
-    result2 = handle_transaction(invalid_date_request)
-    print(f"Result 2: {result2}\n")
-
-    # Test Case 3: Invalid amount type
-    invalid_amount_request = {"amount": "one hundred", "date": "2023-10-27"}
-    result3 = handle_transaction(invalid_amount_request)
-    print(f"Result 3: {result3}\n")
+    import sqlite3 # Import sqlite3 here for the function to work standalone if needed, though it's usually imported at the top.
+    # Example usage setup (assuming this script is run):
+    # app.run(debug=True)
+    pass

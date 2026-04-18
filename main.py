@@ -97,12 +97,21 @@ def add_transaction():
     except Exception as e:
         # Rollback in case of error
         conn.rollback()
-        return {"error": f"Database error: {str(e)}"}
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
     finally:
         conn.close()
 
+@app.route('/api/monthly_summary', methods=['GET'])
+def get_monthly_summary():
+    """
+    Retrieves the pre-calculated monthly spending summaries from the cache.
+    """
+    if 'all' in db_summary_cache:
+        # Return the cached results directly
+        return jsonify(db_summary_cache['all']), 200
+    else:
+        # Fallback if cache is somehow empty (should not happen if startup runs correctly)
+        return jsonify({"error": "Summary data not found"}), 503
+
 if __name__ == '__main__':
-    import sqlite3 # Import sqlite3 here for the function to work standalone if needed, though it's usually imported at the top.
-    # Example usage setup (assuming this script is run):
-    # app.run(debug=True)
-    pass
+    app.run(debug=True)

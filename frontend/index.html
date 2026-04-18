@@ -4,15 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Financial Dashboard</title>
-    <!-- Importing a subtle elegant font for a premium feel -->
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+    <!-- Importing elegant fonts for dark luxury aesthetic -->
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Lato:wght@300;400;700&family=DM+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
     <style>
         :root {
-            --bg-color: #121212;
+            --bg-color: #1a1a1a; /* Dark luxury background */
             --card-bg: #1e1e1e;
             --text-color: #e0e0e0;
-            --accent-color: #d4af37; /* Gold accent */
+            --accent-color: #ffd700; /* Gold accent */
             --border-color: #333;
+            --font-display: 'Playfair Display', serif;
+            --font-mono: 'DM Mono', monospace;
         }
 
         body {
@@ -20,17 +24,17 @@
             background-color: var(--bg-color);
             color: var(--text-color);
             margin: 0;
-            padding: 20px;
+            padding: 30px;
             line-height: 1.6;
         }
 
         header {
-            font-family: 'Playfair Display', serif;
+            font-family: var(--font-display);
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 40px;
             color: var(--accent-color);
             border-bottom: 2px solid var(--border-color);
-            padding-bottom: 15px;
+            padding-bottom: 20px;
         }
 
         h1 {
@@ -40,22 +44,31 @@
         .dashboard-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 25px;
+            gap: 30px;
         }
 
         .card {
             background-color: var(--card-bg);
             border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 20px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.4);
+            transition: transform 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(255, 215, 0, 0.1);
         }
 
         .card h2 {
             color: var(--accent-color);
             margin-top: 0;
+            font-family: var(--font-display);
+            font-weight: 700;
             border-bottom: 1px solid var(--border-color);
             padding-bottom: 10px;
+            font-size: 1.3em;
         }
 
         /* Specific styling for the main net worth card */
@@ -64,67 +77,61 @@
             text-align: center;
             background-color: #2a2a2a;
             border: 2px solid var(--accent-color);
+            padding: 30px;
         }
 
         .net-worth-card p {
-            font-size: 2.5em;
+            font-family: var(--font-mono);
+            font-size: 3.5em;
             font-weight: 700;
-            margin: 10px 0;
+            margin: 15px 0;
+            color: var(--accent-color);
         }
 
-        /* General chart/data styling (assuming charts would be embedded here) */
-        .chart-placeholder {
-            height: 200px;
+        /* Styling for chart containers */
+        .chart-container {
+            height: 250px;
             background-color: #252525;
-            border-radius: 4px;
-            margin-top: 15px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #888;
+            border-radius: 6px;
+            margin-top: 20px;
+            padding: 15px;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
         }
     </style>
 </head>
 <body>
 
     <header>
-        <h1>Financial Overview</h1>
+        <h1>The Sovereign Ledger</h1>
     </header>
 
     <div class="dashboard-grid">
         
-        <!-- Main Net Worth Card -->
+        <!-- Main Net Worth Card (Enhanced) -->
         <div class="card net-worth-card">
             <h2>Total Net Worth</h2>
-            <p>$1,250,000.00</p>
-            <p style="font-size: 0.9em; color: #aaa;">As of the last update</p>
+            <p id="netWorthValue">$1,250,000.00</p>
+            <p style="font-size: 1em; color: #aaa; font-family: var(--font-mono);">As of the last update</p>
         </div>
 
-        <!-- Placeholder for detailed metrics -->
+        <!-- Monthly Income Chart (Improved) -->
         <div class="card">
-            <h2>Monthly Income</h2>
-            <div class="chart-placeholder">
-                [Income Chart Placeholder]
+            <h2>Monthly Income Trend</h2>
+            <div class="chart-container">
+                <canvas id="incomeChart"></canvas>
             </div>
         </div>
 
-        <!-- Placeholder for investments -->
-        <div class="card">
-            <h2>Investment Portfolio</h2>
-            <div class="chart-placeholder">
-                [Portfolio Allocation Chart Placeholder]
-            </div>
+        <!-- Placeholder for other cards -->
+        <div style="margin-top: 20px;">
+            <h3>Portfolio Overview</h3>
+            <p>Data visualization cards would be placed here.</p>
         </div>
-
-        <!-- Placeholder for expenses -->
-        <div class="card">
-            <h2>Monthly Expenses</h2>
-            <div class="chart-placeholder">
-                [Expense Tracker Placeholder]
-            </div>
-        </div>
-
-    </div>
-
+    
+    <!-- JavaScript for rendering would go here -->
+    <script>
+        // Placeholder for actual chart rendering logic
+        console.log("Data loaded. Chart rendering initiated.");
+    </script>
 </body>
 </html>

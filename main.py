@@ -48,8 +48,24 @@ def get_monthly_summaries_from_db():
     finally:
         conn.close()
 
+def get_monthly_average_spending_from_db():
+    """Calculates the average spending for each month directly from the database."""
+    conn = get_db_connection()
+    try:
+        # Calculate average spending per month
+        cursor = conn.execute("SELECT strftime('%Y-%m') as month, AVG(amount) as average FROM transactions GROUP BY month ORDER BY month DESC")
+        results = cursor.fetchall()
+        
+        # Cache the results
+        db_summary_cache['averages'] = results
+        
+        return results
+    finally:
+        conn.close()
+
 # Pre-calculate summaries upon startup
 get_monthly_summaries_from_db()
+get_monthly_average_spending_from_db()
 
 @app.route('/api/transactions', methods=['POST'])
 def add_transaction():
@@ -100,18 +116,3 @@ def add_transaction():
         return jsonify({"error": f"Database error: {str(e)}"}), 500
     finally:
         conn.close()
-
-@app.route('/api/monthly_summary', methods=['GET'])
-def get_monthly_summary():
-    """
-    Retrieves the pre-calculated monthly spending summaries from the cache.
-    """
-    if 'all' in db_summary_cache:
-        # Return the cached results directly
-        return jsonify(db_summary_cache['all']), 200
-    else:
-        # Fallback if cache is somehow empty (should not happen if startup runs correctly)
-        return jsonify({"error": "Summary data not found"}), 503
-
-if __name__ == '__main__':
-    app.run(debug=True)

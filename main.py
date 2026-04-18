@@ -32,7 +32,7 @@ init_db()
 @app.route('/api/transactions', methods=['POST'])
 def add_transaction():
     """
-    Adds a new transaction to the database with input validation.
+    Adds a new transaction to the database with robust input validation.
     Expects JSON body: {"date": "YYYY-MM-DD", "description": "...", "amount": 123.45}
     """
     data = request.get_json()
@@ -46,16 +46,11 @@ def add_transaction():
         description = data['description']
         amount = float(data['amount'])
 
-        # 2. Validate date format (YYYY-MM-DD)
-        if not date or len(date) != 10 or date[4] != '-' or date[7] != '-':
-            return jsonify({"error": "Invalid date format. Please use YYYY-MM-DD."}), 400
-
-        # Basic check for date validity
+        # 2. Validate date format (YYYY-MM-DD) and existence
         try:
             datetime.datetime.strptime(date, '%Y-%m-%d')
         except ValueError:
-            return jsonify({"error": "Invalid date provided. Please ensure the date is a real calendar date."}), 400
-
+            return jsonify({"error": "Invalid date format. Please use YYYY-MM-DD."}), 400
 
         # 3. Insert into the database
         conn = get_db_connection()
@@ -98,52 +93,26 @@ def get_average_spending():
         return jsonify({"error": "Invalid month format. Please provide a date in YYYY-MM format."}), 400
 
     try:
-        # Extract YYYY-MM part
-        year_month = month
+        # Use LIKE operator for reliable month filtering in SQLite
+        # We check if the date starts with the requested YYYY-MM string
+        search_pattern = f"{month}%"
         
         conn = get_db_connection()
-        # Calculate the average amount for transactions in the specified month using standard date comparison
         cursor = conn.execute(
-            "SELECT AVG(amount) FROM transactions WHERE date >= ? AND date < ? LIMIT 1",
-            (f"{year_month}-01", f"{year_month}-31") # Approximation for date range check
+            "SELECT AVG(amount) FROM transactions WHERE date LIKE ? LIMIT 1",
+            (search_pattern,)
         )
         result = cursor.fetchone()
         
         if result:
             average_amount = result[0]
             return jsonify({
-                "month": year_month,
+                "month": month,
                 "average_amount": round(average_amount, 2)
             }), 200
         else:
-            return jsonify({"error": f"No transactions found for the month {year_month}"}), 404
+            return jsonify({"error": f"No transactions found for the month {month}"}), 404
 
     except Exception as e:
         print(f"Error calculating average spending: {e}")
-        return jsonify({"error": "An internal error occurred while calculating average spending"}), 500
-    finally:
-        conn.close()
-
-@app.route('/api/monthly_summary', methods=['GET'])
-def get_monthly_summary():
-    """
-    Calculates the total spending for each month in the database.
-    Expects no query parameters.
-    """
-    conn = get_db_connection()
-    
-    # Group by year and month and sum the amounts
-    cursor = conn.execute(
-        "SELECT strftime('%Y-%m'), SUM(amount) as total_amount FROM transactions GROUP BY strftime('%Y-%m')"
-    )
-    results = cursor.fetchall()
-    conn.close()
-    
-    # Convert results to a list of dictionaries
-    summary = [dict(row) for row in results]
-    
-    return jsonify(summary)
-
-if __name__ == '__main__':
-    # Run the Flask application
-    app.run(debug=True)
+        return jsonify({"error": "An internal error occurred while calculating the average."})

@@ -82,3 +82,6 @@ Added a hover animation to the charts to improve user experience and provide a m
 
 ### 2026-04-18 20:38 -- FRONTEND
 
+
+### 2026-04-18 20:44 -- BACKEND
+

@@ -104,7 +104,53 @@ def summaries():
     
     return jsonify(monthly_summary_cache)
 
+@app.route('/api/top_expenses/<YYYY-MM>')
+def top_expenses(year_month):
+    """
+    New endpoint: Retrieves the top 10 spending descriptions for a specific month.
+    Example usage: /api/top_expenses/2023-10
+    """
+    try:
+        # Validate the input format
+        datetime.datetime.strptime(year_month, '%Y-%m')
+    except ValueError:
+        return jsonify({"error": "Invalid month format. Please use YYYY-MM."}), 400
+
+    conn = get_db_connection()
+    
+    # SQL query to find the top 10 descriptions by total spent for the given month
+    query = """
+        SELECT 
+            description, 
+            SUM(amount) as total_spent
+        FROM transactions
+        WHERE strftime('%Y-%m', date) = ?
+        GROUP BY description
+        ORDER BY total_spent DESC
+        LIMIT 10
+    """
+    
+    cursor = conn.cursor()
+    cursor.execute(query, (year_month,))
+    results = cursor.fetchall()
+    conn.close()
+    
+    if not results:
+        return jsonify({"message": f"No transactions found for {year_month}"}), 200
+
+    # Format results for JSON response
+    formatted_results = [
+        {"description": row['description'], "total_spent": round(row['total_spent'], 2)}
+        for row in results
+    ]
+    
+    return jsonify({
+        "month": year_month,
+        "top_expenses": formatted_results
+    }), 200
+
 if __name__ == '__main__':
-    # In a production environment, use a proper WSGI server.
-    # For this example, we run the Flask app.
-    app.run(debug=True)
+    # In a real application, use a proper WSGI server.
+    print("Server starting...")
+    # Note: Running this directly is for demonstration purposes only.
+    # app.run(debug=True)

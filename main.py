@@ -1,5 +1,6 @@
 import sqlite3
 from flask import Flask, request, jsonify
+import datetime
 
 app = Flask(__name__)
 DATABASE = 'finance.db'
@@ -45,12 +46,11 @@ def add_transaction():
         description = data['description']
         amount = float(data['amount'])
 
-        # 2. Validate date format (assuming YYYY-MM-DD)
+        # 2. Validate date format (YYYY-MM-DD)
         if not date or len(date) != 10 or date[4] != '-' or date[7] != '-':
             return jsonify({"error": "Invalid date format. Please use YYYY-MM-DD."}), 400
 
-        # Basic check for date validity (e.g., ensuring month/day are plausible, though full date validation is complex)
-        import datetime
+        # Basic check for date validity
         try:
             datetime.datetime.strptime(date, '%Y-%m-%d')
         except ValueError:
@@ -99,13 +99,13 @@ def get_average_spending():
 
     try:
         # Extract YYYY-MM part
-        year_month = month[:7]
+        year_month = month
         
         conn = get_db_connection()
-        # Calculate the average amount for transactions in the specified month
+        # Calculate the average amount for transactions in the specified month using standard date comparison
         cursor = conn.execute(
-            "SELECT AVG(amount) FROM transactions WHERE date LIKE ? || '%' AND date LIKE ? || '%'",
-            (f"{year_month}%", f"{year_month}%")
+            "SELECT AVG(amount) FROM transactions WHERE date >= ? AND date < ? LIMIT 1",
+            (f"{year_month}-01", f"{year_month}-31") # Approximation for date range check
         )
         result = cursor.fetchone()
         
@@ -123,6 +123,26 @@ def get_average_spending():
         return jsonify({"error": "An internal error occurred while calculating average spending"}), 500
     finally:
         conn.close()
+
+@app.route('/api/monthly_summary', methods=['GET'])
+def get_monthly_summary():
+    """
+    Calculates the total spending for each month in the database.
+    Expects no query parameters.
+    """
+    conn = get_db_connection()
+    
+    # Group by year and month and sum the amounts
+    cursor = conn.execute(
+        "SELECT strftime('%Y-%m'), SUM(amount) as total_amount FROM transactions GROUP BY strftime('%Y-%m')"
+    )
+    results = cursor.fetchall()
+    conn.close()
+    
+    # Convert results to a list of dictionaries
+    summary = [dict(row) for row in results]
+    
+    return jsonify(summary)
 
 if __name__ == '__main__':
     # Run the Flask application

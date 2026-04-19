@@ -44,7 +44,10 @@ def get_monthly_summaries_from_db():
         # Cache the results in a dictionary for fast lookup
         db_summary_cache['all'] = {row['month']: {'month_year': row['month'], 'total_spent': row['total']} for row in results}
         
-        return db_summary_cache['all']
+        return True
+    except sqlite3.Error as e:
+        print(f"Database error during monthly summary calculation: {e}")
+        return False
     finally:
         conn.close()
 
@@ -59,58 +62,45 @@ def get_monthly_average_spending_from_db():
         # Cache the results
         db_summary_cache['averages'] = results
         
-        return results
+        return True
+    except sqlite3.Error as e:
+        print(f"Database error during monthly average calculation: {e}")
+        return False
     finally:
         conn.close()
 
 def get_top_expenses_by_month(month):
-    """Calculates the top 10 expense categories for a specific month from the database."""
-    conn = get_db_connection()
-    try:
-        # Calculate top 10 expenses by grouping description and summing amounts
-        cursor = conn.execute('''
-            SELECT description, SUM(amount) as total
-            FROM transactions
-            WHERE strftime('%Y-%m', date) = ?
-            GROUP BY description
-            ORDER BY total DESC
-            LIMIT 10
-        ''', (month,))
+    """Calculates the top 10 expense categories for a given month."""
+    if not isinstance(month, str):
+        return []
         
+    try:
+        # Ensure the input is in the expected format (YYYY-MM) if necessary, 
+        # though we rely on the caller for format consistency here.
+        pass
+    except Exception:
+        return []
+
+    try:
+        query = f"""
+        SELECT category, SUM(amount) as total
+        FROM expenses
+        WHERE strftime('%Y-%m', date) = ?
+        GROUP BY category
+        ORDER BY total DESC
+        LIMIT 10
+        """
+        cursor = sqlite3.Cursor()
+        cursor.execute(query, (month,))
         results = cursor.fetchall()
-        
-        # Format results for JSON response
-        top_expenses = [{'category': row['description'], 'total_spent': row['total']} for row in results]
-        
-        return top_expenses
-    finally:
-        conn.close()
-
-# Pre-calculate summaries upon startup
-get_monthly_summaries_from_db()
-get_monthly_average_spending_from_db()
-
-@app.route('/api/summary/<string:month>', methods=['GET'])
-def get_summary_by_month(month):
-    """
-    Endpoint to retrieve summary data (total spent) for a specific month using O(1) cache lookup.
-    """
-    # Check if the month exists in the cached data
-    totals = db_summary_cache.get('all', {})
-    if month in totals:
-        return jsonify({"month": month, "total_spent": totals[month]['total_spent']})
-    
-    return jsonify({"error": f"No summary data found for month {month}"}), 404
-
-@app.route('/api/top_expenses/<string:month>', methods=['GET'])
-def get_top_expenses(month):
-    """
-    Endpoint to retrieve the top 10 expense categories for a given month.
-    """
-    try:
-        top_expenses = get_top_expenses_by_month(month)
-        if not top_expenses:
-            return jsonify({"error": f"No expense data found for month {month}"}), 404
-        return {"month": month, "top_expenses": top_expenses}
+        return [{"category": row[0], "total": row[1]} for row in results]
     except Exception as e:
-        return {"error": str(e)}, 500
+        # print(f"Error executing query: {e}")
+        return []
+
+import sqlite3 # Import sqlite3 here to ensure it's available for the function scope
+
+# --- Example usage setup (assuming a database structure exists) ---
+# Note: In a real application, the database connection setup would be external.
+# For this standalone example, we assume a simple setup for demonstration purposes.
+# If this code were run in a real environment, the database connection would need to be established.

@@ -34,22 +34,22 @@ def init_db():
 init_db()
 
 def get_monthly_summaries_from_db():
-    """Calculates monthly spending totals directly from the database using SQL aggregation."""
+    """Calculates monthly spending totals directly from the database using SQL aggregation and caches results in a dictionary for O(1) lookup."""
     conn = get_db_connection()
     try:
         # Optimized single query to get all monthly summaries
         cursor = conn.execute("SELECT strftime('%Y-%m') as month, SUM(amount) as total FROM transactions GROUP BY month ORDER BY month DESC")
         results = cursor.fetchall()
         
-        # Cache the results
-        db_summary_cache['all'] = results
+        # Cache the results in a dictionary for fast lookup
+        db_summary_cache['all'] = {row['month']: {'month_year': row['month'], 'total_spent': row['total']} for row in results}
         
-        return results
+        return db_summary_cache['all']
     finally:
         conn.close()
 
 def get_monthly_average_spending_from_db():
-    """Calculates the average spending for each month directly from the database using SQL aggregation."""
+    """Calculates the average spending for each month directly from the database using SQL aggregation and caches results."""
     conn = get_db_connection()
     try:
         # Calculate average spending per month
@@ -70,53 +70,26 @@ get_monthly_average_spending_from_db()
 @app.route('/api/summary/<string:month>', methods=['GET'])
 def get_summary_by_month(month):
     """
-    Endpoint to retrieve summary data (total spent) for a specific month.
-    Implements O(1) lookup against the cached data.
+    Endpoint to retrieve summary data (total spent) for a specific month using O(1) cache lookup.
     """
-    if 'all' in db_summary_cache:
-        # Search the cached results directly
-        for summary in db_summary_cache['all']:
-            if summary['month'] == month:
-                return jsonify({
-                    "month": summary['month'],
-                    "total_spent": summary['total_spent']
-                })
-        return {"error": "Data not found"}
-    return {"error": "System error"}
+    # Check if the month exists in the cached data
+    if 'totals' in globals() and month in globals()['totals']:
+        return {"month": month, "total_spent": globals()['totals'][month]}
+    return {"error": "Data not found for this month"}
 
-@app.route('/api/average_spend/<string:date>', methods=['GET'])
-def get_average_spend(date):
-    """Retrieves the average spending for a specific month."""
-    try:
-        # We assume the date format passed is YYYY-MM (e.g., '2023-10')
-        # Note: In a real application, date validation should be more robust.
-        
-        # Since the data is aggregated by month, we look for the month matching the input.
-        # For simplicity here, we assume the input 'date' corresponds to the month we want.
-        
-        # Since the data is stored by month, we need to find the corresponding average.
-        # In a production system, we would fetch the specific month's average.
-        
-        # For this example, we'll just return a placeholder or rely on the structure of the pre-calculated data.
-        # Since the current structure only stores the results from the initial calculation, 
-        # we'll simulate fetching the relevant average if the data structure supported direct lookup.
-        
-        # Since we don't have the raw data structure here, we'll return a mock based on the pre-calculated data structure.
-        
-        # A more realistic approach would be to iterate over the pre-calculated averages if we had access to the raw data.
-        
-        # For demonstration, let's assume we can find the average for the requested month.
-        # Since we don't have the raw data structure, we'll return a mock result based on the pre-calculated structure.
-        
-        # If we had the raw data, we would iterate:
-        # for month_data in db_results:
-        #     if month_data['month'] == date:
-        #         return {"average": month_data['average']}
-        
-        return {"error": f"Average spend for {date} not found in pre-calculated results."}
+# Example usage for demonstration (not part of the core API structure, but helpful for testing)
+if __name__ == '__main__':
+    from flask import Flask, jsonify
+    app = Flask(__name__)
 
-    except Exception as e:
-        return {"error": f"An error occurred: {str(e)}"}
+    @app.route('/api/summary/<month>')
+    def get_summary(month):
+        # Access the globally stored data initialized by the setup above
+        totals = globals().get('totals', {})
+        if month in totals:
+            return jsonify({"month": month, "total_spent": totals[month]})
+        return jsonify({"error": f"No summary found for {month}"}), 404
 
-# Note: To run this, you would need to import Flask and set up a proper route structure.
-# The provided code above is conceptual based on the request context.
+    # To run this example, you would need to run the application context.
+    # For simplicity in this environment, we skip running the Flask server setup.
+    print("Application setup complete. To use this, integrate with a Flask environment.")

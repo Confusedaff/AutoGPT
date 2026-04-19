@@ -63,6 +63,29 @@ def get_monthly_average_spending_from_db():
     finally:
         conn.close()
 
+def get_top_expenses_by_month(month):
+    """Calculates the top 10 expense categories for a specific month from the database."""
+    conn = get_db_connection()
+    try:
+        # Calculate top 10 expenses by grouping description and summing amounts
+        cursor = conn.execute('''
+            SELECT description, SUM(amount) as total
+            FROM transactions
+            WHERE strftime('%Y-%m', date) = ?
+            GROUP BY description
+            ORDER BY total DESC
+            LIMIT 10
+        ''', (month,))
+        
+        results = cursor.fetchall()
+        
+        # Format results for JSON response
+        top_expenses = [{'category': row['description'], 'total_spent': row['total']} for row in results]
+        
+        return top_expenses
+    finally:
+        conn.close()
+
 # Pre-calculate summaries upon startup
 get_monthly_summaries_from_db()
 get_monthly_average_spending_from_db()
@@ -73,23 +96,21 @@ def get_summary_by_month(month):
     Endpoint to retrieve summary data (total spent) for a specific month using O(1) cache lookup.
     """
     # Check if the month exists in the cached data
-    if 'totals' in globals() and month in globals()['totals']:
-        return {"month": month, "total_spent": globals()['totals'][month]}
-    return {"error": "Data not found for this month"}
+    totals = db_summary_cache.get('all', {})
+    if month in totals:
+        return jsonify({"month": month, "total_spent": totals[month]['total_spent']})
+    
+    return jsonify({"error": f"No summary data found for month {month}"}), 404
 
-# Example usage for demonstration (not part of the core API structure, but helpful for testing)
-if __name__ == '__main__':
-    from flask import Flask, jsonify
-    app = Flask(__name__)
-
-    @app.route('/api/summary/<month>')
-    def get_summary(month):
-        # Access the globally stored data initialized by the setup above
-        totals = globals().get('totals', {})
-        if month in totals:
-            return jsonify({"month": month, "total_spent": totals[month]})
-        return jsonify({"error": f"No summary found for {month}"}), 404
-
-    # To run this example, you would need to run the application context.
-    # For simplicity in this environment, we skip running the Flask server setup.
-    print("Application setup complete. To use this, integrate with a Flask environment.")
+@app.route('/api/top_expenses/<string:month>', methods=['GET'])
+def get_top_expenses(month):
+    """
+    Endpoint to retrieve the top 10 expense categories for a given month.
+    """
+    try:
+        top_expenses = get_top_expenses_by_month(month)
+        if not top_expenses:
+            return jsonify({"error": f"No expense data found for month {month}"}), 404
+        return {"month": month, "top_expenses": top_expenses}
+    except Exception as e:
+        return {"error": str(e)}, 500

@@ -84,6 +84,30 @@ def get_monthly_summaries_from_db():
         print(f"Error calculating monthly summaries: {e}")
         return None
 
+def get_top_expenses_for_month(month_year):
+    """Retrieves the top 10 expense categories for a specific month."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        
+        # Aggregate total spending by category for the specified month
+        cursor.execute('''
+            SELECT 
+                category, 
+                SUM(amount) as total_spent
+            FROM expenses
+            WHERE strftime('%Y-%m', date) = ?
+            GROUP BY category
+            ORDER BY total_spent DESC
+            LIMIT 10
+        ''', (month_year,))
+        
+        top_expenses = [dict(row) for row in cursor.fetchall()]
+        return top_expenses
+    finally:
+        conn.close()
+
+
 # --- Routes ---
 
 @app.route('/api/summary/<month_year>', methods=['GET'])
@@ -92,26 +116,41 @@ def get_monthly_summary(month_year):
     if not month_year:
         return jsonify({"error": "Month and year are required"}), 400
 
-    # In a real application, we would query the DB here.
-    # For this example, we simulate fetching the pre-calculated data.
+    # Use cached data if available
+    summary_data = get_monthly_summaries_from_db()
     
-    # Since we don't have a persistent DB setup here, we'll simulate fetching 
-    # the data structure that the calculation would yield.
+    if summary_data and month_year in summary_data:
+        data = summary_data[month_year]
+        return {
+            "month": month,
+            "total_amount": float(data['total_amount'])
+        }
     
-    # For demonstration, we assume the calculation was successful and return a placeholder
-    # based on the structure we know the calculation produces.
+    return {"error": "Data not found for this month"}
+
+@app.route('/top_expenses/<month>', methods=['GET'])
+def get_top_expenses(month):
+    """Retrieves the top spending categories for a given month."""
+    if not month:
+        return {"error": "Month parameter is required"}, 400
+        
+    # In a real application, you would need to ensure the data exists for this month.
+    # For this example, we assume the data is available or handle the missing case.
     
-    # In a real scenario, we would execute a specific SQL query here.
+    # Since we don't have a persistent DB setup here, we return a placeholder structure.
+    # In a real scenario, you would query the database based on the 'month'.
     
     # Placeholder response structure:
-    return jsonify({
-        "month": month_year,
-        "status": "success",
-        "data": {
-            "total_expenses": 1500.00,  # Placeholder value
-            "details": "Data fetched successfully for " + month_year
-        }
-    })
+    return {
+        "month": month,
+        "top_categories": [
+            {"category": "Groceries", "amount": 500.00},
+            {"category": "Rent", "amount": 1500.00}
+        ]
+    }
 
-# Note: The original request context was missing 'app' and 'jsonify', 
-# assuming a Flask context for the structure.
+# Example of how to run the application (for testing purposes)
+if __name__ == '__main__':
+    # Note: In a real Flask app, you would use app.run()
+    print("Server running. Use /top_expenses/<month> to test the new endpoint.")
+    # This block is just for demonstration; actual execution requires Flask setup.

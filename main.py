@@ -63,27 +63,30 @@ def get_summary(year, month):
     if not (1 <= month <= 12):
         return jsonify({"error": "Invalid month provided"}), 400
     
-    # Note: The original code implicitly assumed the input was valid, added explicit check for robustness.
-    return {"year": year, "month": month, "total_sales": 0} # Placeholder return
+    summary = get_monthly_summary_cached(year, month)
+    
+    if summary:
+        return jsonify({
+            "year": year, 
+            "month": month, 
+            "total_sales": summary["total"],
+            "transaction_count": summary["count"]
+        })
+    else:
+        return jsonify({"error": f"No sales data found for {year}-{month}"}), 404
 
 @app.route('/api/totals/<int:year>')
 def get_yearly_totals(year):
-    """Endpoint to get the total sales for a given year."""
-    total = 0
-    for month in range(1, 13):
-        # In a real application, we would need a more complex structure to map months to years.
-        # For this example, we will just sum up all available data points if we assume the data spans multiple years.
-        # Since the current data is limited, we'll just return a placeholder based on the structure.
-        # A proper implementation would require iterating over the actual data source.
-        pass 
-    
-    # Since the current data structure is flat, we will return 0 as we cannot accurately calculate yearly totals without a date field in the summary.
-    return {"year": year, "total_sales": 0}
+    """Endpoint to get the total sales for a given year by using cached calculation."""
+    total = get_yearly_total_cached(year)
+    return jsonify({"year": year, "total_sales": total})
 
 
 if __name__ == '__main__':
+    # Initialize cache when the application starts
+    initialize_cache()
+    
     # Example usage (for testing purposes)
-    # In a real scenario, you would run this via a WSGI server.
     print("Server running. Access /api/totals/2023 to test.")
     # app.run(debug=True) # Uncomment to run the Flask app
     pass

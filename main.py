@@ -53,6 +53,20 @@ def get_yearly_total_cached(year):
             
     return total_sales
 
+def get_all_monthly_totals():
+    """Retrieves all monthly summary totals from the cache."""
+    return [summary["total"] for summary in monthly_summary_cache.values()]
+
+def get_average_monthly_spending():
+    """
+    Calculates the average total sales across all recorded months.
+    """
+    monthly_totals = get_all_monthly_totals()
+    if not monthly_totals:
+        return 0.0
+    
+    return sum(monthly_totals) / len(monthly_totals)
+
 # --- API Endpoints ---
 
 @app.route('/api/summary/<int:year>/<int:month>', methods=['GET'])
@@ -81,12 +95,22 @@ def get_yearly_totals(year):
     total = get_yearly_total_cached(year)
     return jsonify({"year": year, "total_sales": total})
 
+@app.route('/api/average_spending', methods=['GET'])
+def get_average_spending():
+    """
+    NEW ENDPOINT: Calculates the average total sales across all recorded months.
+    """
+    average = get_average_monthly_spending()
+    return jsonify({
+        "average_monthly_sales": round(average, 2)
+    })
+
 
 if __name__ == '__main__':
     # Initialize cache when the application starts
     initialize_cache()
     
-    # Example usage (for testing purposes)
-    print("Server running. Access /api/totals/2023 to test.")
-    # app.run(debug=True) # Uncomment to run the Flask app
+    # Example usage (for testing):
+    # print(f"Average Monthly Sales: {get_average_monthly_sales()}")
+    # app.run(debug=True)
     pass

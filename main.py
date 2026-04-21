@@ -44,73 +44,119 @@ def get_sales_by_month(data, month):
             continue
 
     if not monthly_amounts:
-        return {"status": "error", "message": f"No data found for month {month}"} if 'month' in locals() else {"error": True}
+        return {"status": "error", "message": f"No data found for month {month}"}
 
-    return {"month": month, "average": sum(values) / len(values)}
+    return {"month": target_month, "average": sum(monthly_amounts) / len(monthly_amounts)}
 
-# Pre-calculate the data on startup
 def initialize_data():
-    """Calculates and stores the aggregated data."""
+    """Calculates and stores the aggregated data, populating caches."""
     print("Initializing data...")
-    results = {}
     
-    # Group data by month
+    monthly_totals = defaultdict(lambda: {'total': 0, 'count': 0})
+    
+    # 1. Calculate monthly averages
     monthly_totals = {}
-    for record in results:
-        month = int(record['month'])
-        if month not in monthly_totals:
-            monthly_totals[month] = {'total': 0, 'count': 0}
-        monthly_totals[month]['total'] += record['amount']
-        monthly_totals[month]['count'] += 1
-
-    # Calculate averages
-    for month, data in monthly_totals.items():
-        results[month] = {
-            'average': data['total'] / data['count']
-        }
+    for record in self.data:
+        month = record['date'].strftime('%Y-%m')
+        amount = record['amount']
         
+        if month not in monthly_totals:
+            monthly_totals[month] = 0
+        monthly_totals[month] += amount
+
+    for month, total in monthly_totals.items():
+        average = total / len([r for r in self.data if r['date'].strftime('%Y-%m') == month])
+        monthly_totals[month] = average
+        
+    self.monthly_averages = monthly_totals
+
+    # 2. Calculate top spending categories (Example: grouping by month for simplicity)
+    # In a real scenario, this would involve grouping by category. Here we simulate a simple grouping.
+    category_spending = {}
+    for record in self.data:
+        month = record['date'].strftime('%Y-%m')
+        category = record['category']
+        amount = record['amount']
+        
+        if month not in category_spending:
+            category_spending[month] = {}
+        
+        if category not in category_spending[month]:
+            category_spending[month][category] = 0
+            
+        category_spending[month][category] += amount
+
+    self.monthly_category_spending = category_spending
+    
     print("Data initialization complete.")
-    return results
-
-# Run initialization once when the module loads
-if not hasattr(initialize_data, 'initialized'):
-    initialize_data()
-    initialize_data.initialized = True
 
 
-@app.route('/data')
-def get_monthly_data():
-    """Endpoint to retrieve pre-calculated monthly averages."""
-    # In a real Flask app, you would access the global results dictionary here.
-    # For this standalone example, we simulate access.
-    
-    # Since we cannot easily access the module-level state in this isolated block, 
-    # we'll assume the data is available or re-calculate for demonstration purposes.
-    
-    # Re-calculating for demonstration purposes if the global state isn't easily accessible:
-    
-    monthly_results = {}
-    monthly_totals = {}
-    
-    for record in results:
-        month = int(record['month'])
-        if month not in monthly_totals:
-            monthly_totals[month] = {'total': 0, 'count': 0}
-        monthly_totals[month]['total'] += record['amount']
-        monthly_totals[month]['count'] += 1
+# --- Class structure to hold data and methods ---
+class DataProcessor:
+    def __init__(self, data):
+        self.data = data
+        self.monthly_averages = {}
+        self.monthly_category_spending = {}
 
-    for month, data in monthly_totals.items():
-        monthly_results[month] = {
-            'average': data['total'] / data['count']
-        }
+    def process(self):
+        """Runs the data processing logic."""
+        self.initialize_data()
+
+    def initialize_data(self):
+        """Performs the actual calculation based on the input data."""
         
-    return jsonify(monthly_results)
+        monthly_totals = {}
+        category_spending = {}
+        
+        for record in self.data:
+            date = record['date']
+            amount = record['amount']
+            category = record['category']
+            
+            month_key = date.strftime('%Y-%m')
+            
+            # Calculate monthly average
+            if month_key not in monthly_totals:
+                monthly_totals[month_key] = {'total': 0, 'count': 0}
+            monthly_totals[month_key]['total'] += amount
+            monthly_totals[month_key]['count'] += 1
 
-# --- Mock Flask setup for execution context ---
-from flask import Flask, jsonify
-app = Flask(__name__)
+            # Calculate category spending
+            if month_key not in category_spending:
+                category_spending[month_key] = {}
+            
+            if category not in category_spending[month_key]:
+                category_spending[month_key][category] = 0
+            category_spending[month_key][category] += amount
+            
+        # Finalize averages
+        self.monthly_averages = {}
+        for month, data in monthly_totals.items():
+            self.monthly_averages[month] = data['total'] / data['count']
+            
+        self.monthly_category_spending = category_spending
 
-if __name__ == '__main__':
-    # In a real scenario, this would run the server.
-    # For this execution, we just ensure the functions run.
-    pass
+
+# --- Example Usage ---
+
+# Sample Data Setup
+sample_data = [
+    {'date': '2023-01-15', 'amount': 100, 'category': 'Groceries'},
+    {'date': '2023-01-20', 'amount': 50, 'category': 'Entertainment'},
+    {'date': '2023-02-05', 'amount': 150, 'category': 'Groceries'},
+    {'date': '2023-02-10', 'amount': 200, 'category': 'Rent'},
+    {'date': '2023-02-25', 'amount': 75, 'category': 'Entertainment'},
+]
+
+processor = DataProcessor(sample_data)
+processor.process()
+
+print("\n--- Monthly Averages ---")
+for month, avg in processor.monthly_averages.items():
+    print(f"{month}: ${avg:.2f}")
+
+print("\n--- Monthly Category Spending ---")
+for month, categories in processor.monthly_category_spending.items():
+    print(f"Month {month}:")
+    for category, amount in categories.items():
+        print(f"  {category}: ${amount:.2f}")

@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, request
 from datetime import datetime
 from collections import defaultdict
+import operator
 
 app = Flask(__name__)
 
@@ -16,52 +17,30 @@ SALES_DATA = [
 ]
 
 # --- Data Processing and Caching Mechanism ---
-# Cache for pre-calculated yearly totals (will be calculated on request for dynamic behavior)
-# YEARLY_TOTALS_CACHE = {}
-# Cache for pre-calculated monthly averages
-# MONTHLY_AVERAGES_CACHE = {}
 
-def process_data(data):
-    """Processes the raw data into structured lists for efficient lookup."""
-    yearly_totals = defaultdict(float)
-    monthly_sums = defaultdict(float)
-    monthly_counts = defaultdict(int)
+def get_sales_by_month(data, month):
+    """Filters sales data for a specific month and calculates the average."""
+    if not data:
+        return None
 
+    target_month = int(month)
+    
+    monthly_amounts = []
+    
     for record in data:
         try:
-            year = int(record['year'])
-            month = int(record['month'])
-            amount = float(record['amount'])
-            
-            # Yearly totals
-            yearly_totals[year] += amount
-            
-            # Monthly data for average calculation
-            key = (year, month)
-            monthly_sums[key] += amount
-            monthly_counts[key] += 1
-        except (ValueError, KeyError, TypeError) as e:
-            # Robust error handling for malformed data points
-            print(f"Skipping malformed record during processing: {record}. Error: {e}")
+            record_date = datetime.strptime(record['date'], "%Y-%m-%d")
+            if record_date.month == target_month:
+                monthly_amounts.append(float(record['amount']))
+        except (ValueError, KeyError, TypeError):
+            # Skip malformed records
             continue
 
-    # Calculate final monthly averages
-    monthly_averages = {}
-    for (year, month), total in monthly_sums.items():
-        monthly_averages[(year, month)] = total / monthly_counts[(year, month)]
+    if not monthly_amounts:
+        return {"status": "error", "message": f"No sales data found for month {target_month}."}
 
-    # Calculate final yearly totals
-    final_yearly_totals = dict(yearly_totals)
-    
-    return final_yearly_totals, monthly_averages
-
-# Pre-process data once when the application starts (simulating loading from DB)
-try:
-    yearly_totals_cache, monthly_averages_cache = process_data(SALES_DATA)
-except Exception as e:
-    print(f"Fatal error during initial data processing: {e}")
-    yearly_totals_cache = {}
-    monthly_averages_cache = {}
+    average = sum(monthly_amounts) / len(monthly_amounts)
+    return {"status": "success", "month": target_month, "average_amount": round(average, 2), "count": len(monthly_amounts)}
 
 
 # --- API Endpoints ---
@@ -69,17 +48,61 @@ except Exception as e:
 @app.route('/api/yearly_totals', methods=['GET'])
 def get_yearly_totals():
     """Returns the total sales aggregated by year."""
-    return {"status": "success", "data": dict(sorted(items(), reverse=True))}
+    yearly_totals = defaultdict(float)
+    for record in SALES_DATA:
+        try:
+            year = int(record['date'][:4])
+            amount = float(record['amount'])
+            yearly_totals[year] += amount
+        except (ValueError, KeyError, TypeError):
+            continue
+            
+    # Return sorted results
+    return jsonify({
+        "status": "success", 
+        "data": dict(sorted(yearly_totals.items(), reverse=True))
+    })
 
 @app.route('/api/monthly_averages', methods=['GET'])
 def get_monthly_averages():
-    """Returns the average sales for each month."""
-    return {"status": "success", "data": dict(sorted(items(), reverse=True))}
+    """Calculates the average transaction amount for each month."""
+    monthly_totals = {}
+    monthly_counts = {}
 
-if __name__ == '__main__':
-    # Example usage (for testing purposes)
-    # In a real application, you would use a proper WSGI server.
-    print("Server running. Access endpoints via /api/monthly_averages or /api/monthly_averages")
-    # Note: To run this, you would need to import Flask and run the app.
-    # For this self-contained example, we just define the routes.
-    pass
+    for record in SALES_DATA:
+        try:
+            date = record['date']
+            amount = record['amount']
+            month = date.month
+            
+            if month not in monthly_totals:
+                monthly_totals[month] = 0
+                monthly_counts[month] = 0
+            
+            monthly_totals[month] += amount
+            monthly_counts[month] += 1
+        except (TypeError, KeyError):
+            # Skip malformed records
+            continue
+
+    averages = {}
+    for month, total in monthly_totals.items():
+        count = monthly_counts[month]
+        averages[month] = round(total / count, 2)
+
+    return {"monthly_averages": averages}
+
+# Example of a new endpoint utilizing the data
+@app.route('/api/average_by_month/<int:month>', methods=['GET'])
+def get_average_by_month(month):
+    """Returns the average transaction amount for a specific month."""
+    results = get_monthly_averages()
+    
+    if month in results.get("monthly_averages", {}):
+        return {"month": month, "average_amount": results["monthly_averages"][month]}
+    else:
+        return {"error": f"No data found for month: {month}"}, 404
+
+# Note: In a real Flask application, you would need to import Flask and define the data source.
+# For this self-contained example, we assume 'SALES_DATA' is accessible or defined globally.
+# Since the original prompt implies a runnable example, I'll structure it as a runnable script context.

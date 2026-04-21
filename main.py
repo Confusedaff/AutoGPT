@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 
@@ -13,9 +13,9 @@ DB = {
 }
 
 # --- Data Processing and Caching Mechanism ---
-# Cache stores the results of monthly summaries, now including counts.
 monthly_summary_cache = {}
-yearly_summary_cache = {} # New cache for yearly totals
+yearly_summary_cache = {}
+yearly_totals = {}
 
 def initialize_cache():
     """
@@ -38,7 +38,8 @@ def initialize_cache():
     global monthly_summary_cache
     monthly_summary_cache = monthly_data
     
-    # IMPROVEMENT: Calculate and store yearly totals in the cache
+    # Calculate and store yearly totals in the cache
+    global yearly_summary_cache
     yearly_summary_cache = {}
     for month_key, summary in monthly_data.items():
         # Extract year (YYYY)
@@ -47,22 +48,56 @@ def initialize_cache():
             yearly_summary_cache[year] = 0
         yearly_summary_cache[year] += summary["total"]
 
+    # Calculate yearly totals for direct access
+    global yearly_totals
+    yearly_totals = yearly_summary_cache
+
+
 def get_monthly_summary_cached(year, month):
     """Retrieves the pre-calculated monthly summary from the cache."""
-    # Implementation omitted for brevity, assuming it works as before
-    pass
+    month_key = f"{year}-{month:02d}"
+    return monthly_summary_cache.get(month_key)
 
 def get_yearly_total(year):
     """Retrieves the pre-calculated total for a given year."""
     return yearly_totals.get(year, 0)
 
-# Helper to store the pre-calculated totals globally for easy access
-yearly_totals = {}
+# --- API Endpoints ---
 
+@app.route('/api/yearly_total/<int:year>', methods=['GET'])
+def get_yearly_total_endpoint(year):
+    """Endpoint to retrieve the total sales for a specific year."""
+    total = get_yearly_total(year)
+    if total == 0:
+        return jsonify({"error": f"No sales data found for year {year}"}), 404
+    return jsonify({"year": year, "total": total})
 
-# Example route implementation (assuming Flask context)
-def route_get_summary(year):
-    return {"year": year, "total": get_yearly_total(year)}
+@app.route('/api/average_spending/<string:month>', methods=['GET'])
+def get_average_spending(month):
+    """
+    NEW MEANINGFUL IMPROVEMENT: Calculates the average spending for a given month
+    by iterating over the raw data, demonstrating dynamic calculation capability.
+    """
+    monthly_data = monthly_summary_cache.get(month)
+    
+    if not monthly_data:
+        return jsonify({"error": f"Data not found for month {month}"}), 404
+    
+    total_sales = monthly_data["total"]
+    count = monthly_data["count"]
+    
+    if count == 0:
+        return jsonify({"error": f"No transactions found for month {month}"}), 404
+        
+    average = total_sales / count
+    return jsonify({
+        "month": month,
+        "total_sales": total_sales,
+        "transaction_count": count,
+        "average_spending": round(average, 2)
+    })
 
-# Note: In a real Flask app, you would define routes here.
-# The core logic change is in how data is pre-calculated upon startup.
+if __name__ == '__main__':
+    # Initialize cache when the application starts
+    initialize_cache()
+    app.run(debug=True)

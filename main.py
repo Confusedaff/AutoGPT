@@ -1,90 +1,71 @@
 from flask import Flask, jsonify, request
+from datetime import datetime
 
 app = Flask(__name__)
 
-# --- Database Simulation (In-memory for this example) ---
-DB = {
-    "sales": [
-        {"date": "2023-01-15", "amount": 100},
-        {"date": "2023-01-20", "amount": 150},
-        {"date": "2023-02-10", "amount": 200},
-        {"date": "2023-02-25", "amount": 120},
-    ]
-}
+# --- Database Simulation (Simulating SQLite persistence via in-memory structure) ---
+# In a real application, this would be replaced by SQLite interaction.
+SALES_DATA = [
+    {"date": "2023-01-15", "amount": 100},
+    {"date": "2023-01-20", "amount": 150},
+    {"date": "2023-02-10", "amount": 200},
+    {"date": "2023-02-25", "amount": 120},
+    {"date": "2024-03-01", "amount": 50},
+    {"date": "2024-04-10", "amount": 100},
+]
 
 # --- Data Processing and Caching Mechanism ---
-monthly_summary_cache = {}
-yearly_summary_cache = {}
-yearly_totals = {}
+# Cache for pre-calculated yearly totals
+YEARLY_TOTALS_CACHE = {}
 
-def initialize_cache():
-    """
-    Calculates all monthly sales summaries and yearly totals once upon initialization 
-    and populates the cache.
-    """
-    # (Implementation remains the same)
-    
-    # Group data by year and sum amounts
+def calculate_yearly_totals(data):
+    """Calculates the total sales amount for each year from the raw data."""
     yearly_totals = {}
-    for record in self.data:
-        year = record['year']
-        amount = record['amount']
-        yearly_totals[year] = yearly_totals.get(year, 0) + amount
+    for record in data:
+        try:
+            # Extract year from the date string (assuming YYYY-MM-DD format)
+            year = int(record['date'][:4])
+            amount = record['amount']
+            yearly_totals[year] = yearly_totals.get(year, 0) + amount
+        except (ValueError, KeyError) as e:
+            # Robust error handling for malformed data points
+            print(f"Skipping malformed record: {record}. Error: {e}")
+            continue
+    return yearly_totals
 
-    # Store results in a structure accessible by year
-    for year, total in yearly_totals.items():
-        yearly_totals[year] = total
-
-    self.yearly_totals = yearly_totals
-
-# Initialize the data structure (simulating a class context for simplicity)
-class DataStore:
-    def __init__(self):
-        self.data = [
-            {'year': 2023, 'amount': 150},
-            {'year': 2023, 'amount': 200},
-            {'year': 2024, 'amount': 50},
-            {'year': 2024, 'amount': 100},
-        ]
-        self.yearly_totals = {}
-
-data_store = DataStore()
-data_store.yearly_totals = {} # Initialize the store
-
-# Run initialization
-data_store.yearly_totals = {}
-for record in data_store.data:
-    year = record['year']
-    amount = record['amount']
-    data_store.yearly_totals[year] = data_store.yearly_totals.get(year, 0) + amount
+# Initialize the cache upon application startup
+YEARLY_TOTALS_CACHE = calculate_yearly_totals(SALES_DATA)
 
 
-def get_yearly_total(year):
-    return data_store.yearly_totals.get(year, 0)
+# --- API Endpoints ---
 
-# --- Application Logic ---
+@app.route('/api/yearly_summary/<int:year>', methods=['GET'])
+def get_yearly_summary(year):
+    """
+    Retrieves the total sales amount for a specific year.
+    Implements robust input validation and safe data retrieval.
+    """
+    if year < 1900:
+        return jsonify({"error": "Year must be a valid historical year."}), 400
 
-def get_yearly_total_safe(year):
-    """Safely retrieves the yearly total, returning None if the year is not found."""
-    return get_yearly_total(year)
+    total = YEARLY_TOTALS_CACHE.get(year)
 
-def get_yearly_total_safe_for_api(year):
-    """Returns the yearly total or raises an error if the year is invalid (for API context)."""
-    if year is None:
-        raise ValueError("Invalid year provided.")
-    return get_yearly_total(year)
+    if total is not None:
+        return jsonify({
+            "year": year,
+            "total_amount": total,
+            "status": "success"
+        }), 200
+    else:
+        # Specific error handling for missing data
+        return jsonify({
+            "error": f"No sales data found for the year {year}.",
+            "status": "not_found"
+        }), 404
 
+# --- Application Run ---
 
-# Example usage (simulating an API endpoint handler)
-def handle_request(year):
-    try:
-        total = get_yearly_total_safe_for_api(year)
-        if total is not None:
-            return {"year": year, "total_amount": total}
-        else:
-            return {"error": f"No data found for year {year}"}
-    except ValueError as e:
-        return {"error": str(e)}
-
-# print(handle_request(2023))
-# print(handle_request(2025))
+if __name__ == '__main__':
+    # In a production environment, use a proper WSGI server.
+    # Running on default host/port for demonstration.
+    app.run(debug=True)

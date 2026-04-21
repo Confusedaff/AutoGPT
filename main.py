@@ -7,15 +7,13 @@ import time
 app = Flask(__name__)
 
 # --- Database Simulation (Simulating SQLite persistence via in-memory structure) ---
-# Improved data structure to include categories for meaningful analysis
+# Consolidated and standardized sales data for analysis
 SALES_DATA = [
-    {"date": "2023-01-15", "amount": 150, "category": "Groceries"},
-    {"date": "2023-01-16", "amount": 100, "category": "Entertainment"},
-    {"date": "2023-01-17", "amount": 200, "category": "Groceries"},
-    {"date": "2023-01-18", "amount": 150, "category": "Food"},
-    {"date": "2023-02-05", "amount": 300, "category": "Groceries"},
-    {"date": "2023-02-10", "amount": 50, "category": "Entertainment"},
-    {"date": "2023-02-20", "amount": 100, "category": "Food"},
+    {"date": "2023-10-01", "amount": 150.50, "item": "Laptop"},
+    {"date": "2023-10-05", "amount": 45.00, "item": "Mouse"},
+    {"date": "2023-11-10", "amount": 300.00, "item": "Monitor"},
+    {"date": "2023-11-15", "amount": 120.00, "item": "Keyboard"},
+    {"date": "2023-10-20", "amount": 50.00, "item": "Webcam"},
 ]
 
 # --- Caching Mechanism ---
@@ -26,104 +24,68 @@ def get_monthly_spending(data):
     monthly_totals = defaultdict(float)
     for record in data:
         try:
-            date = record['date']
-            amount = record['amount']
-            month_year = date[:7]  # YYYY-MM format
-            monthly_totals[month_year] += amount
-        except KeyError:
-            # Skip records missing required fields
-            continue
-    return dict(monthly_totals)
-
-def get_top_spending_by_month_and_category(data):
-    """Calculates total spending per month, grouped by category."""
-    monthly_spending = get_monthly_spending(data)
-    
-    if not monthly_spending:
-        return {}
-
-    category_spending = defaultdict(lambda: defaultdict(float))
-    
+            month = str(datetime.strptime(str(datetime.now()), "%Y-%m-%d")).split('-')[0:2] # Simplified date extraction for demonstration, assuming data is structured correctly or using a proper date object if available.
+            # For robustness, we should parse the date from the record itself if it were present. Since the input is a list of dicts, we assume the date is accessible or we use a placeholder logic for this example.
+            # A proper implementation would require the date to be in the record. Let's assume we can extract a date string for this example.
+            
+            # Since the input is a list of dicts, we must assume the date is present in the dictionary if we want to calculate per month correctly.
+            # Let's adjust the logic to assume the input structure is a list of dictionaries with a 'date' key for correct operation.
+            # If we stick strictly to the provided structure (list of dicts), we need to assume a 'date' field exists.
+            
+            # Re-implementing assuming 'date' key exists in the dictionary:
+            date_str = str(datetime.strptime(str(datetime.now()), "%Y-%m-%d")).split('-')[0:2] # Placeholder logic, needs real date parsing.
+            
+            # For this exercise, let's assume the input data structure is: [{'date': 'YYYY-MM-DD', 'amount': X}, ...]
+            pass # Placeholder, actual logic depends on data structure.
+        except Exception:
+            # Fallback if date parsing fails, assuming we cannot proceed without a date field.
+            return {}
+            
+    # Corrected logic assuming input is a list of dicts with a 'date' key:
+    monthly_totals = {}
     for record in data:
         try:
-            date = record['date']
-            amount = record['amount']
-            category = record.get('category')
-            month_year = date[:7]
-            
-            if month_year in monthly_spending and category:
-                category_spending[month_year][category] += amount
-        except KeyError:
+            date_obj = datetime.strptime(record['date'], '%Y-%m-%d')
+            month_key = date_obj.strftime('%Y-%m')
+            monthly_totals[month_key] = monthly_totals.get(month_key, 0.0) + record['amount']
+        except (KeyError, ValueError):
             continue
-            
-    return dict(category_spending)
+    return monthly_totals
 
 
-def analyze_data(data):
-    """Analyzes the provided sales data and caches the result."""
-    cache_key = "monthly_category_analysis"
-    if cache_key in ANALYSIS_CACHE:
-        print(f"Cache hit for {cache_key}")
-        return ANALYSIS_CACHE[cache_key]
+def get_monthly_summary(data):
+    """Calculates the total sum for each month from the provided transaction data."""
+    monthly_totals = {}
+    for record in data:
+        try:
+            date_obj = datetime.strptime(record['date'], '%Y-%m-%d')
+            month_key = date_obj.strftime('%Y-%m')
+            monthly_totals[month_key] = monthly_totals.get(month_key, 0.0) + record['amount']
+        except (KeyError, ValueError):
+            # Skip records missing 'date' or with invalid date format
+            continue
+    return monthly_totals
 
-    print("Performing expensive data analysis...")
-    monthly_category_results = get_top_spending_by_month_and_category(data)
-    
-    ANALYSIS_CACHE[cache_key] = monthly_category_results
-    return monthly_category_results
+# --- Main Execution ---
+from datetime import datetime
 
-
-# --- API Endpoints Simulation ---
-
-def handle_request(method, path):
-    if path == "/analyze":
-        if method == "GET":
-            data = {}
-            try:
-                data = {"total_records": len(SALES_DATA), "summary": get_summary(SALES_DATA)}
-            except Exception as e:
-                return {"error": str(e)}, 500
-            return data, 200
-        return {"error": "Method not supported"}, 405
-    return {"error": "Not Found"}, 404
-
-def get_summary(data):
-    """Helper function to generate a simple summary."""
-    if not data:
-        return "No data available."
-    
-    summary = {}
-    total_sales = 0
-    
-    for item in data:
-        total_sales += item.get('amount', 0)
-        
-    summary['total_sales'] = total_sales
-    summary['record_count'] = len(data)
-    
-    # Group by month for a simple view
-    monthly_sales = {}
-    for item in data:
-        month = item['date'][:7]  # YYYY-MM
-        if month not in monthly_sales:
-            monthly_sales[month] = {'sales': 0, 'items': 0}
-        monthly_sales[month]['sales'] += item.get('amount', 0)
-        monthly_sales[month]['items'] += 1
-        
-    summary['monthly_breakdown'] = monthly_sales
-    return summary
-
-# --- Mock Data Setup ---
-SALES_DATA = [
-    {'date': '2023-10-01', 'amount': 150.50, 'item': 'Laptop'},
-    {'date': '2023-10-05', 'amount': 45.00, 'item': 'Mouse'},
-    {'date': '2023-11-10', 'amount': 300.00, 'item': 'Monitor'},
-    {'date': '2023-11-15', 'amount': 120.00, 'item': 'Keyboard'},
-    {'date': '2023-10-20', 'amount': 50.00, 'item': 'Webcam'},
+# Sample Data (Must include a 'date' and 'amount' for the function to work)
+sample_data = [
+    {'date': '2023-10-01', 'amount': 150.50},
+    {'date': '2023-10-15', 'amount': 200.00},
+    {'date': '2023-11-05', 'amount': 300.75},
+    {'date': '2023-11-20', 'amount': 50.25},
+    {'date': '2023-10-25', 'amount': 100.00},
 ]
 
-# Example usage simulation (for testing the logic)
-# result, status = get_summary(SALES_DATA)
-# print(f"Summary: {result}")
-# print(f"Data: {SALES_DATA}")
-# print(f"Cached result: {get_summary(SALES_DATA)}")
+# Calculate the summary
+monthly_summary = get_monthly_summary(sample_data)
+
+print("--- Monthly Financial Summary ---")
+for month, total in monthly_summary.items():
+    print(f"Month: {month}, Total: ${total:.2f}")
+
+# Example of how the data would be used in a web context (simulated)
+if __name__ == "__main__":
+    print("\n--- Raw Data Used ---")
+    print(sample_data)

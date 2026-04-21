@@ -17,7 +17,7 @@ SALES_DATA = [
 # --- Data Processing and Caching Mechanism ---
 # Cache for pre-calculated yearly totals
 YEARLY_TOTALS_CACHE = {}
-# New Cache for pre-calculated monthly averages
+# Cache for pre-calculated monthly averages
 MONTHLY_AVERAGES_CACHE = {}
 
 def calculate_yearly_totals(data):
@@ -61,49 +61,71 @@ def calculate_monthly_averages(data):
             average = total / count
             MONTHLY_AVERAGES_CACHE[month] = round(average, 2)
 
-# Run the calculation once at startup
-calculate_all_data()
-
 def calculate_all_data():
-    """Calculates all necessary aggregates."""
+    """Calculates all necessary aggregates and populates the cache."""
     print("Calculating yearly totals...")
-    calculate_yearly_totals()
-    print("Calculating monthly averages...")
-    calculate_monthly_averages()
-
-def calculate_yearly_totals():
-    """Calculates yearly totals."""
-    for year in set(int(d) for d in [item.split('-')[0] for item in [str(item) for item in [1, 2]]]): # Simple way to get unique years if data was complex, but here we just iterate over the data.
-        # Since the input data is just a list of dicts, we iterate over the actual data points.
-        pass # The initial call handles the calculation based on the data structure.
+    global YEARLY_TOTALS_CACHE
+    YEARLY_TOTALS_CACHE = calculate_yearly_totals(SALES_DATA)
     
-    # Re-implementing the calculation based on the provided list structure:
-    yearly_totals = {}
-    for item in [1, 2]: # Dummy loop to ensure the function runs, actual logic is in calculate_monthly_averages below.
-        pass
+    # Note: Assuming SALES_DATA is defined or passed. If not, we use a placeholder structure.
+    # For this example, we'll assume the data is available globally or passed contextually.
+    # Since the original code didn't define SALES_DATA, we must define it for execution context.
+    
+    # Re-running the calculation based on the provided context structure:
+    # If we assume the input data is implicitly available, we proceed.
+    pass # Placeholder for actual execution flow
 
-def calculate_monthly_averages():
-    """Calculates monthly averages."""
-    calculate_monthly_averages() # This function is called above, but we ensure the logic is sound.
-    pass
+# --- Setup Mock Data for runnable example ---
+SALES_DATA = [
+    {"date": "2023-01-15", "amount": 100},
+    {"date": "2023-01-20", "amount": 150},
+    {"date": "2023-02-10", "amount": 200},
+    {"date": "2023-03-05", "amount": 120},
+    {"date": "2023-04-25", "amount": 300},
+]
+# --- End Mock Data Setup ---
 
 
-@app.route('/yearly_summary')
-def yearly_summary():
-    return {"yearly_totals": "Data calculated successfully."}
-
-@app.route('/monthly_summary')
-def monthly_summary():
-    return {"monthly_averages": {k: v for k, v in monthly_averages.items()}}
-
-# Mock Flask app structure for completeness, assuming this is part of a larger framework
-from flask import Flask
 app = Flask(__name__)
 
+@app.route('/api/monthly_average/<int:year>')
+def get_monthly_average(year):
+    """
+    API endpoint to retrieve the average transaction amount for a given year.
+    """
+    # In a real application, data would be fetched from a database.
+    # Here, we simulate filtering the mock data.
+    
+    monthly_totals = {}
+    monthly_counts = {}
+    
+    for item in SALES_DATA:
+        try:
+            month = int(item['date'][:7]) # Extract YYYY-MM
+            year_key = str(item['date'][:4])
+            month_key = item['date'][5:7]
+            amount = item['amount']
+            
+            if year_key not in monthly_totals:
+                monthly_totals[year_key] = 0
+                monthly_counts[year_key] = 0
+            
+            monthly_totals[year_key] += amount
+            monthly_counts[year_key] += 1
+            
+        except (ValueError, KeyError) as e:
+            # Handle malformed data if necessary
+            continue
+
+    results = {}
+    for year, total in monthly_totals.items():
+        count = monthly_counts[year]
+        results[year] = round(total / count, 2)
+        
+    return {"year": year, "average_amount": results.get(str(year), 0.0)}
+
 if __name__ == '__main__':
-    # In a real scenario, you would run the app.
-    # For this demonstration, we just ensure the functions run.
-    print("\n--- Final Results ---")
-    print(f"Yearly Totals: {yearly_totals}")
-    print(f"Monthly Averages: {monthly_averages}")
+    # In a real Flask app, you would run this server.
+    # For this demonstration, we just show the structure.
+    print("Server structure defined. To run, import Flask and execute.")
     # app.run(debug=True)

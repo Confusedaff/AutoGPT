@@ -44,62 +44,73 @@ def get_sales_by_month(data, month):
             continue
 
     if not monthly_amounts:
-        return {"status": "error", "message": f"No sales data found for month {target_month}."}
+        return {"status": "error", "message": f"No data found for month {month}"} if 'month' in locals() else {"error": True}
 
-    average = sum(monthly_amounts) / len(monthly_amounts)
-    return {"status": "success", "month": target_month, "average_amount": round(float(average), 2)}
+    return {"month": month, "average": sum(values) / len(values)}
 
+# Pre-calculate the data on startup
 def initialize_data():
-    """Initializes the pre-calculated data upon application start."""
+    """Calculates and stores the aggregated data."""
     print("Initializing data...")
-    monthly_averages = {}
+    results = {}
     
-    # Calculate average for each month
-    for month in range(1, 13):
-        monthly_averages[month] = 0.0
-        
     # Group data by month
-    monthly_data = {m: [] for m in range(1, 13)}
-    
-    for record in [1, 2, 3, 4, 5]: # Simulate grouping data if we had more complex data
-        # In this simple case, we just iterate over the records provided
-        pass
+    monthly_totals = {}
+    for record in results:
+        month = int(record['month'])
+        if month not in monthly_totals:
+            monthly_totals[month] = {'total': 0, 'count': 0}
+        monthly_totals[month]['total'] += record['amount']
+        monthly_totals[month]['count'] += 1
 
-    # Since the input data is flat, we calculate the average across all available data points
-    # For this simple example, we'll just calculate the overall average for demonstration purposes
-    
-    # For a real scenario, we would aggregate sales by month.
-    # Since we don't have monthly sales, we'll simulate the structure for the endpoint.
-    
-    # Let's calculate the average of the provided data points for demonstration
-    total_sum = sum(100 for _ in range(len(monthly_data))) # Placeholder sum
-    
-    for month in range(1, 13):
-        # Placeholder average calculation
-        monthly_averages[month] = round(total_sum / 12, 2)
+    # Calculate averages
+    for month, data in monthly_totals.items():
+        results[month] = {
+            'average': data['total'] / data['count']
+        }
         
     print("Data initialization complete.")
-    return monthly_averages
+    return results
+
+# Run initialization once when the module loads
+if not hasattr(initialize_data, 'initialized'):
+    initialize_data()
+    initialize_data.initialized = True
 
 
-@app.route('/api/averages', methods=['GET'])
-def get_monthly_averages():
-    averages = initialize_data()
-    return jsonify({"message": "Monthly averages calculated", "data": averages})
+@app.route('/data')
+def get_monthly_data():
+    """Endpoint to retrieve pre-calculated monthly averages."""
+    # In a real Flask app, you would access the global results dictionary here.
+    # For this standalone example, we simulate access.
+    
+    # Since we cannot easily access the module-level state in this isolated block, 
+    # we'll assume the data is available or re-calculate for demonstration purposes.
+    
+    # Re-calculating for demonstration purposes if the global state isn't easily accessible:
+    
+    monthly_results = {}
+    monthly_totals = {}
+    
+    for record in results:
+        month = int(record['month'])
+        if month not in monthly_totals:
+            monthly_totals[month] = {'total': 0, 'count': 0}
+        monthly_totals[month]['total'] += record['amount']
+        monthly_totals[month]['count'] += 1
 
-@app.route('/api/top_spending', methods=['GET'])
-def get_top_spending():
-    # In a real application, this would query the database.
-    # Here we return mock data.
-    top_spending = [
-        {"month": 1, "total": 1500.50},
-        {"month": 2, "total": 1800.75},
-        {"month": 3, "total": 1200.00},
-    ]
-    return jsonify({"message": "Top spending data retrieved", "data": top_spending})
+    for month, data in monthly_totals.items():
+        monthly_results[month] = {
+            'average': data['total'] / data['count']
+        }
+        
+    return jsonify(monthly_results)
 
-# Example usage setup (assuming Flask context)
-# from flask import Flask, jsonify
-# app = Flask(__name__)
-# if __name__ == '__main__':
-#     app.run(debug=True)
+# --- Mock Flask setup for execution context ---
+from flask import Flask, jsonify
+app = Flask(__name__)
+
+if __name__ == '__main__':
+    # In a real scenario, this would run the server.
+    # For this execution, we just ensure the functions run.
+    pass

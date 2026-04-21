@@ -9,9 +9,10 @@ SALES_DATA = [
     {"date": "2023-01-15", "amount": 100},
     {"date": "2023-01-20", "amount": 150},
     {"date": "2023-02-10", "amount": 200},
-    {"date": "2023-02-25", "amount": 120},
-    {"date": "2024-03-01", "amount": 50},
-    {"date": "2024-04-10", "amount": 100},
+    {"date": "2023-03-05", "amount": 120},
+    {"date": "2023-04-25", "amount": 300},
+    {"date": "2024-01-01", "amount": 50},
+    {"date": "2024-02-15", "amount": 100},
 ]
 
 # --- Data Processing and Caching Mechanism ---
@@ -36,96 +37,75 @@ def calculate_yearly_totals(data):
     return dict(yearly_totals)
 
 def calculate_monthly_averages(data):
-    """Calculates the average sales amount for each month from the raw data."""
-    monthly_totals = defaultdict(float)
-    counts = defaultdict(int)
-
-    for record in data:
-        try:
-            # Extract month from the date string (YYYY-MM-DD)
-            month_str = record['date'][5:7]
-            month = int(month_str)
-            amount = record['amount']
-            
-            monthly_totals[month] += amount
-            counts[month] += 1
-        except (ValueError, KeyError) as e:
-            # Skip records that don't conform to the expected structure
-            print(f"Skipping record during monthly calculation: {record}. Error: {e}")
-            continue
-
-    # Calculate the average and populate the cache
-    for month, total in monthly_totals.items():
-        count = counts[month]
-        if count > 0:
-            average = total / count
-            MONTHLY_AVERAGES_CACHE[month] = round(average, 2)
-
-def calculate_all_data():
-    """Calculates all necessary aggregates and populates the cache."""
-    print("Calculating yearly totals...")
-    global YEARLY_TOTALS_CACHE
-    YEARLY_TOTALS_CACHE = calculate_yearly_totals(SALES_DATA)
-    
-    # Note: Assuming SALES_DATA is defined or passed. If not, we use a placeholder structure.
-    # For this example, we'll assume the data is available globally or passed contextually.
-    # Since the original code didn't define SALES_DATA, we must define it for execution context.
-    
-    # Re-running the calculation based on the provided context structure:
-    # If we assume the input data is implicitly available, we proceed.
-    pass # Placeholder for actual execution flow
-
-# --- Setup Mock Data for runnable example ---
-SALES_DATA = [
-    {"date": "2023-01-15", "amount": 100},
-    {"date": "2023-01-20", "amount": 150},
-    {"date": "2023-02-10", "amount": 200},
-    {"date": "2023-03-05", "amount": 120},
-    {"date": "2023-04-25", "amount": 300},
-]
-# --- End Mock Data Setup ---
-
-
-app = Flask(__name__)
-
-@app.route('/api/monthly_average/<int:year>')
-def get_monthly_average(year):
-    """
-    API endpoint to retrieve the average transaction amount for a given year.
-    """
-    # In a real application, data would be fetched from a database.
-    # Here, we simulate filtering the mock data.
-    
+    """Calculates the average sales amount for each month from the list."""
     monthly_totals = {}
     monthly_counts = {}
-    
-    for item in SALES_DATA:
-        try:
-            month = int(item['date'][:7]) # Extract YYYY-MM
-            year_key = str(item['date'][:4])
-            month_key = item['date'][5:7]
-            amount = item['amount']
-            
-            if year_key not in monthly_totals:
-                monthly_totals[year_key] = 0
-                monthly_counts[year_key] = 0
-            
-            monthly_totals[year_key] += amount
-            monthly_counts[year_key] += 1
-            
-        except (ValueError, KeyError) as e:
-            # Handle malformed data if necessary
-            continue
+    for record in data:
+        month = record['month']
+        amount = record['amount']
+        monthly_totals[month] = monthly_totals.get(month, 0) + amount
+        monthly_counts[month] = monthly_counts.get(month, 0) + 1
 
     results = {}
-    for year, total in monthly_totals.items():
-        count = monthly_counts[year]
-        results[year] = round(total / count, 2)
-        
-    return {"year": year, "average_amount": results.get(str(year), 0.0)}
+    for month, total in monthly_totals.items():
+        results[month] = total / monthly_counts[month]
+    
+    return results
 
-if __name__ == '__main__':
-    # In a real Flask app, you would run this server.
-    # For this demonstration, we just show the structure.
-    print("Server structure defined. To run, import Flask and execute.")
-    # app.run(debug=True)
+def process_data(data):
+    """Processes the raw data into structured lists for efficient lookup."""
+    yearly_totals = {}
+    monthly_data = []
+
+    for record in data:
+        year = int(record['year'])
+        month = int(record['month'])
+        amount = float(record['amount'])
+        
+        # Yearly totals
+        yearly_totals[year] = yearly_totals.get(year, 0) + amount
+        
+        # Monthly data for average calculation
+        monthly_data.append({'year': year, 'month': month, 'amount': amount})
+
+    # Calculate final yearly totals
+    final_yearly_totals = {year: yearly_totals[year] for year in yearly_totals}
+    
+    # Calculate monthly averages
+    monthly_averages = {}
+    monthly_sums = {}
+    monthly_counts = {}
+
+    for item in monthly_data:
+        key = (item['year'], item['month'])
+        amount = item['amount']
+        
+        monthly_sums[key] = monthly_sums.get(key, 0) + amount
+        monthly_counts[key] = monthly_counts.get(key, 0) + 1
+
+    for (year, month), total in monthly_sums.items():
+        monthly_averages[(year, month)] = total / monthly_counts[(year, month)]
+
+    return final_yearly_totals, monthly_averages
+
+
+# --- Initialization ---
+# Simulate raw data input structure based on the required calculations
+raw_data = [
+    {'year': 2023, 'month': 1, 'amount': 100.0},
+    {'year': 2023, 'month': 1, 'amount': 150.0},
+    {'year': 2023, 'month': 2, 'amount': 200.0},
+    {'year': 2023, 'month': 3, 'amount': 50.0},
+    {'year': 2024, 'month': 1, 'amount': 300.0},
+    {'year': 2024, 'month': 1, 'amount': 100.0},
+    {'year': 2024, 'month': 2, 'amount': 200.0},
+]
+
+# Process the data once upon loading
+yearly_totals, monthly_averages = process_data(raw_data)
+
+# --- Example Usage ---
+print("--- Yearly Totals ---")
+print(yearly_totals)
+print("\n--- Monthly Averages ---")
+print(monthly_averages)

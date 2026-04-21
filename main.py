@@ -53,38 +53,41 @@ def initialize_cache():
     yearly_totals = yearly_summary_cache
 
 
+# Run initialization immediately when the application starts
+initialize_cache()
+
+
 def get_monthly_summary_cached(year, month):
     """Retrieves the pre-calculated monthly summary from the cache."""
     month_key = f"{year}-{month:02d}"
     return monthly_summary_cache.get(month_key)
 
 def get_yearly_total(year):
-    """Retrieves the total sales for a given year."""
-    return 0 # Placeholder, actual implementation would look up in a persistent store if needed
+    """Retrieves the total sales for a given year from the cache."""
+    return yearly_summary_cache.get(year, 0)
+
 
 # --- Flask Routes ---
 
 @app.route('/api/summary/<int:year>')
 def get_yearly_summary(year):
     """Endpoint to get the total sales for a specific year."""
-    # In a real application, this would query a database.
-    # For this example, we'll simulate the data based on the pre-calculated structure.
-    # Since we didn't store yearly totals explicitly, we'll return a placeholder or rely on the pre-calculation if we stored it.
-    
-    # Since we only calculated the structure, we'll return 0 unless we explicitly store the result.
-    # For demonstration purposes, let's assume we can calculate it if we had the raw data, but for now, we return 0.
-    return jsonify({"year": year, "total_sales": 0})
+    total_sales = get_yearly_total(year)
+    return jsonify({"year": year, "total_sales": total_sales})
 
 
 @app.route('/api/average_monthly_sales/<int:year>')
 def get_average_monthly_sales(year):
     """Endpoint to calculate the average monthly sales for a specific year."""
-    # This requires knowing the number of months in the year and the total sales.
-    # Since we only have the structure, we'll return 0.
-    return jsonify({"year": year, "average_monthly_sales": 0})
+    total_sales = get_yearly_total(year)
+    
+    # We assume a standard 12 months for calculating the average, 
+    # or we could calculate based on the actual number of months present in the data.
+    # For simplicity and consistency, we use 12 months.
+    average = total_sales / 12.0 if total_sales > 0 else 0
+    
+    return jsonify({"year": year, "total_sales": total_sales, "average_monthly_sales": round(average, 2)})
 
 
 if __name__ == '__main__':
-    # Note: To run this, you would need to import Flask and define the app object.
-    # Since the original prompt was just a script context, I'll assume the necessary Flask setup exists.
-    pass
+    app.run(debug=True)

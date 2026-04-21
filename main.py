@@ -16,96 +16,70 @@ SALES_DATA = [
 ]
 
 # --- Data Processing and Caching Mechanism ---
-# Cache for pre-calculated yearly totals
-YEARLY_TOTALS_CACHE = {}
+# Cache for pre-calculated yearly totals (will be calculated on request for dynamic behavior)
+# YEARLY_TOTALS_CACHE = {}
 # Cache for pre-calculated monthly averages
-MONTHLY_AVERAGES_CACHE = {}
-
-def calculate_yearly_totals(data):
-    """Calculates the total sales amount for each year from the raw data."""
-    yearly_totals = defaultdict(int)
-    for record in data:
-        try:
-            # Extract year from the date string (assuming YYYY-MM-DD format)
-            year = int(record['date'][:4])
-            amount = record['amount']
-            yearly_totals[year] += amount
-        except (ValueError, KeyError) as e:
-            # Robust error handling for malformed data points
-            print(f"Skipping malformed record during yearly calculation: {record}. Error: {e}")
-            continue
-    return dict(yearly_totals)
-
-def calculate_monthly_averages(data):
-    """Calculates the average sales amount for each month from the list."""
-    monthly_totals = {}
-    monthly_counts = {}
-    for record in data:
-        month = record['month']
-        amount = record['amount']
-        monthly_totals[month] = monthly_totals.get(month, 0) + amount
-        monthly_counts[month] = monthly_counts.get(month, 0) + 1
-
-    results = {}
-    for month, total in monthly_totals.items():
-        results[month] = total / monthly_counts[month]
-    
-    return results
+# MONTHLY_AVERAGES_CACHE = {}
 
 def process_data(data):
     """Processes the raw data into structured lists for efficient lookup."""
-    yearly_totals = {}
-    monthly_data = []
+    yearly_totals = defaultdict(float)
+    monthly_sums = defaultdict(float)
+    monthly_counts = defaultdict(int)
 
     for record in data:
-        year = int(record['year'])
-        month = int(record['month'])
-        amount = float(record['amount'])
-        
-        # Yearly totals
-        yearly_totals[year] = yearly_totals.get(year, 0) + amount
-        
-        # Monthly data for average calculation
-        monthly_data.append({'year': year, 'month': month, 'amount': amount})
+        try:
+            year = int(record['year'])
+            month = int(record['month'])
+            amount = float(record['amount'])
+            
+            # Yearly totals
+            yearly_totals[year] += amount
+            
+            # Monthly data for average calculation
+            key = (year, month)
+            monthly_sums[key] += amount
+            monthly_counts[key] += 1
+        except (ValueError, KeyError, TypeError) as e:
+            # Robust error handling for malformed data points
+            print(f"Skipping malformed record during processing: {record}. Error: {e}")
+            continue
 
-    # Calculate final yearly totals
-    final_yearly_totals = {year: yearly_totals[year] for year in yearly_totals}
-    
-    # Calculate monthly averages
+    # Calculate final monthly averages
     monthly_averages = {}
-    monthly_sums = {}
-    monthly_counts = {}
-
-    for item in monthly_data:
-        key = (item['year'], item['month'])
-        amount = item['amount']
-        
-        monthly_sums[key] = monthly_sums.get(key, 0) + amount
-        monthly_counts[key] = monthly_counts.get(key, 0) + 1
-
     for (year, month), total in monthly_sums.items():
         monthly_averages[(year, month)] = total / monthly_counts[(year, month)]
 
+    # Calculate final yearly totals
+    final_yearly_totals = dict(yearly_totals)
+    
     return final_yearly_totals, monthly_averages
 
+# Pre-process data once when the application starts (simulating loading from DB)
+try:
+    yearly_totals_cache, monthly_averages_cache = process_data(SALES_DATA)
+except Exception as e:
+    print(f"Fatal error during initial data processing: {e}")
+    yearly_totals_cache = {}
+    monthly_averages_cache = {}
 
-# --- Initialization ---
-# Simulate raw data input structure based on the required calculations
-raw_data = [
-    {'year': 2023, 'month': 1, 'amount': 100.0},
-    {'year': 2023, 'month': 1, 'amount': 150.0},
-    {'year': 2023, 'month': 2, 'amount': 200.0},
-    {'year': 2023, 'month': 3, 'amount': 50.0},
-    {'year': 2024, 'month': 1, 'amount': 300.0},
-    {'year': 2024, 'month': 1, 'amount': 100.0},
-    {'year': 2024, 'month': 2, 'amount': 200.0},
-]
 
-# Process the data once upon loading
-yearly_totals, monthly_averages = process_data(raw_data)
+# --- API Endpoints ---
 
-# --- Example Usage ---
-print("--- Yearly Totals ---")
-print(yearly_totals)
-print("\n--- Monthly Averages ---")
-print(monthly_averages)
+@app.route('/api/yearly_totals', methods=['GET'])
+def get_yearly_totals():
+    """Returns the total sales aggregated by year."""
+    return {"status": "success", "data": dict(sorted(items(), reverse=True))}
+
+@app.route('/api/monthly_averages', methods=['GET'])
+def get_monthly_averages():
+    """Returns the average sales for each month."""
+    return {"status": "success", "data": dict(sorted(items(), reverse=True))}
+
+if __name__ == '__main__':
+    # Example usage (for testing purposes)
+    # In a real application, you would use a proper WSGI server.
+    print("Server running. Access endpoints via /api/monthly_averages or /api/monthly_averages")
+    # Note: To run this, you would need to import Flask and run the app.
+    # For this self-contained example, we just define the routes.
+    pass

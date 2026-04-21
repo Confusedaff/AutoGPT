@@ -1,5 +1,6 @@
 from flask import Flask, jsonify, request
 from datetime import datetime
+from collections import defaultdict
 
 app = Flask(__name__)
 
@@ -20,18 +21,18 @@ YEARLY_TOTALS_CACHE = {}
 
 def calculate_yearly_totals(data):
     """Calculates the total sales amount for each year from the raw data."""
-    yearly_totals = {}
+    yearly_totals = defaultdict(int)
     for record in data:
         try:
             # Extract year from the date string (assuming YYYY-MM-DD format)
             year = int(record['date'][:4])
             amount = record['amount']
-            yearly_totals[year] = yearly_totals.get(year, 0) + amount
+            yearly_totals[year] += amount
         except (ValueError, KeyError) as e:
             # Robust error handling for malformed data points
             print(f"Skipping malformed record: {record}. Error: {e}")
             continue
-    return yearly_totals
+    return dict(yearly_totals)
 
 # Initialize the cache upon application startup
 YEARLY_TOTALS_CACHE = calculate_yearly_totals(SALES_DATA)
@@ -62,6 +63,48 @@ def get_yearly_summary(year):
             "error": f"No sales data found for the year {year}.",
             "status": "not_found"
         }), 404
+
+@app.route('/api/average_spending/<int:month>', methods=['GET'])
+def get_average_spending(month):
+    """
+    Calculates the average sales amount for a specific month (1-12).
+    This endpoint dynamically processes the raw sales data.
+    """
+    if not 1 <= month <= 12:
+        return jsonify({"error": "Month must be an integer between 1 and 12."}), 400
+
+    monthly_totals = defaultdict(float)
+    count = 0
+
+    for record in SALES_DATA:
+        try:
+            # Extract month from the date string (YYYY-MM-DD)
+            month_str = record['date'][5:7]
+            month = int(month_str)
+            amount = record['amount']
+            
+            monthly_totals[month] += amount
+            count += 1
+        except (ValueError, KeyError) as e:
+            # Skip records that don't conform to the expected structure
+            print(f"Skipping record during average calculation: {record}. Error: {e}")
+            continue
+
+    if count == 0:
+        return jsonify({
+            "error": f"No valid sales records found to calculate average for month {month}.",
+            "status": "not_found"
+        }), 404
+
+    # Calculate the average
+    average = sum(monthly_totals.values()) / count
+
+    return jsonify({
+        "month": month,
+        "average_amount": round(average, 2),
+        "record_count": count,
+        "status": "success"
+    }), 200
 
 # --- Application Run ---
 

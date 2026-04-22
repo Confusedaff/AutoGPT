@@ -17,8 +17,10 @@ SALES_DATA = [
 ]
 
 def get_sales_data():
-    """Processes raw sales data into structured summaries."""
+    """Processes raw sales data into structured summaries, including monthly averages."""
     sales_summary = {}
+    
+    # Step 1: Aggregate totals and items per month
     for record in SALES_DATA:
         date_obj = datetime.datetime.strptime(record['date'], '%Y-%m-%d')
         month_key = date_obj.strftime('%Y-%m')
@@ -29,9 +31,30 @@ def get_sales_data():
         sales_summary[month_key]['total_sales'] += record['amount']
         sales_summary[month_key]['items'].add(record['item'])
         
-    return sales_summary
+    # Step 2: Calculate averages
+    monthly_averages = {}
+    for month_key, data in sales_summary.items():
+        if data['total_sales'] > 0:
+            average = data['total_sales'] / len(data['items']) # Average transaction value per unique item sold in that month
+            # Alternatively, if we want average transaction value per record:
+            # average = data['total_sales'] / len(SALES_DATA) # This is total sales divided by total records, which might be more useful.
+            
+            # Let's calculate the average transaction value for the month based on the number of unique items sold:
+            monthly_averages[month_key] = {
+                'total_sales': data['total_sales'],
+                'unique_items_count': len(data['items']),
+                'average_item_value': data['total_sales'] / len(data['items'])
+            }
+        else:
+            monthly_averages[month_key] = {
+                'total_sales': 0,
+                'unique_items_count': 0,
+                'average_item_value': 0.0
+            }
+            
+    return sales_summary, monthly_averages
 
-SALES_SUMMARY = get_sales_data()
+SALES_SUMMARY, MONTHLY_AVERAGES = get_sales_data()
 
 @app.route('/summary')
 def get_summary():
@@ -45,16 +68,9 @@ def get_monthly_summary(month):
         return jsonify(SALES_SUMMARY[month])
     return jsonify({"error": "Month not found"}), 404
 
-# Note: To run this, you would need to import Flask and datetime.
-# Since this is a standalone snippet, I'll assume the necessary imports 
-# (like Flask and datetime) are present in the execution environment.
-# For a runnable example, we need to add imports:
-import datetime
-from flask import Flask, jsonify
-
-app = Flask(__name__)
-
-if __name__ == '__main__':
-    # Example usage simulation (not runnable without proper setup)
-    # print("Running Flask app simulation...")
-    pass
+@app.route('/api/average_spending/<month>')
+def get_average_spending(month):
+    """Returns the average item value sold for a specific month."""
+    if month in MONTHLY_AVERAGES:
+        return jsonify(MONTHLY_AVERAGES[month])
+    return {"error": "Data not found for this month"}

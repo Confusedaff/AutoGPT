@@ -3,135 +3,132 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Financial Dashboard</title>
+    <title>The Sovereign Ledger</title>
     <!-- Importing elegant fonts for dark luxury aesthetic -->
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Lato:wght@300;400;700&family=DM+Mono:wght@400;700&display=swap" rel="stylesheet">
     <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
     <style>
-        :root {
-            --bg-color: #1a1a1a; /* Dark luxury background */
-            --card-bg: #1e1e1e;
-            --text-color: #e0e0e0;
-            --accent-color: #ffd700; /* Gold accent */
-            --border-color: #333;
-            --font-display: 'Playfair Display', serif;
-            --font-mono: 'DM Mono', monospace;
-        }
-
         body {
-            font-family: 'Lato', sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
+            font-family: 'Georgia', serif;
+            background-color: #1a1a1a;
+            color: #e0e0e0;
             margin: 0;
-            padding: 30px;
-            line-height: 1.6;
+            padding: 20px;
         }
-
-        header {
-            font-family: var(--font-display);
-            text-align: center;
-            margin-bottom: 40px;
-            color: var(--accent-color);
-            border-bottom: 2px solid var(--border-color);
-            padding-bottom: 20px;
+        .container {
+            max-width: 1200px;
+            margin: auto;
         }
-
         h1 {
-            margin: 0;
+            text-align: center;
+            color: #ffd700; /* Gold accent */
+            margin-bottom: 30px;
+            border-bottom: 1px solid #444;
+            padding-bottom: 10px;
         }
-
-        .dashboard-grid {
+        .card {
+            background-color: #2a2a2a;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+        .data-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 30px;
+            gap: 20px;
         }
-
-        .card {
-            background-color: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
-            padding: 25px;
-            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.4);
-            transition: transform 0.3s ease;
-        }
-
-        .card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 20px rgba(255, 215, 0, 0.1);
-        }
-
-        .card h2 {
-            color: var(--accent-color);
-            margin-top: 0;
-            font-family: var(--font-display);
-            font-weight: 700;
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 10px;
-            font-size: 1.3em;
-        }
-
-        /* Specific styling for the main net worth card */
-        .net-worth-card {
-            grid-column: 1 / -1; /* Span full width */
-            text-align: center;
-            background-color: #2a2a2a;
-            border: 2px solid var(--accent-color);
-            padding: 30px;
-        }
-
-        .net-worth-card p {
-            font-family: var(--font-mono);
-            font-size: 3.5em;
-            font-weight: 700;
-            margin: 15px 0;
-            color: var(--accent-color);
-        }
-
-        /* Styling for chart containers */
-        .chart-container {
-            height: 250px;
-            background-color: #252525;
-            border-radius: 6px;
-            margin-top: 20px;
+        .stat-box {
+            background-color: #333;
             padding: 15px;
-            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+            border-radius: 6px;
+            text-align: center;
+            border-left: 4px solid #ffd700;
         }
     </style>
 </head>
 <body>
+    <div class="container">
+        <h1>Financial Overview Dashboard</h1>
 
-    <header>
-        <h1>The Sovereign Ledger</h1>
-    </header>
-
-    <div class="dashboard-grid">
-        
-        <!-- Main Net Worth Card (Enhanced) -->
-        <div class="card net-worth-card">
-            <h2>Total Net Worth</h2>
-            <p id="netWorthValue">$1,250,000.00</p>
-            <p style="font-size: 1em; color: #aaa; font-family: var(--font-mono);">As of the last update</p>
-        </div>
-
-        <!-- Monthly Income Chart (Improved) -->
-        <div class="card">
-            <h2>Monthly Income Trend</h2>
-            <div class="chart-container">
-                <canvas id="incomeChart"></canvas>
+        <div class="data-grid">
+            <div class="stat-box">
+                <h2>Total Assets</h2>
+                <p style="font-size: 1.8em; color: #4CAF50;">$1,250,000</p>
+            </div>
+            <div class="stat-box">
+                <h2>Net Worth</h2>
+                <p style="font-size: 1.8em; color: #4CAF50;">$850,000</p>
+            </div>
+            <div class="stat-box">
+                <h2>Monthly Income</h2>
+                <p style="font-size: 1.8em; color: #4CAF50;">$15,000</p>
+            </div>
+            <div class="stat-box">
+                <h2>Investment Growth (YTD)</h2>
+                <p style="font-size: 1.8em; color: #4CAF50;">+12.5%</p>
             </div>
         </div>
 
-        <!-- Placeholder for other cards -->
-        <div style="margin-top: 20px;">
-            <h3>Portfolio Overview</h3>
-            <p>Data visualization cards would be placed here.</p>
+        <div class="card">
+            <h2>Investment Performance Trend</h2>
+            <canvas id="investmentChart"></canvas>
         </div>
-    
-    <!-- JavaScript for rendering would go here -->
+    </div>
+
     <script>
-        // Placeholder for actual chart rendering logic
-        console.log("Data loaded. Chart rendering initiated.");
+        // Sample Data for the Chart
+        const labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'];
+        const investmentData = [100000, 105000, 112000, 118000, 125000, 132000, 140000];
+
+        const ctx = document.getElementById('investmentChart').getContext('2d');
+        const investmentChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Investment Value ($)',
+                    data: investmentData,
+                    borderColor: '#ffd700', // Gold line
+                    backgroundColor: 'rgba(255, 215, 0, 0.2)',
+                    tension: 0.3,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        grid: {
+                            color: '#444'
+                        },
+                        ticks: {
+                            color: '#e0e0e0'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            color: '#444'
+                        },
+                        ticks: {
+                            color: '#e0e0e0'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: '#e0e0e0'
+                        }
+                    },
+                    title: {
+                        display: false
+                    }
+                }
+            }
+        });
     </script>
 </body>
 </html>

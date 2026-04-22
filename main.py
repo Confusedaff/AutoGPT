@@ -22,55 +22,76 @@ def get_sales_data():
     
     # Step 1: Aggregate totals and items per month
     for record in SALES_DATA:
-        date_obj = datetime.datetime.strptime(record['date'], '%Y-%m-%d')
-        month_key = date_obj.strftime('%Y-%m')
+        try:
+            date_obj = datetime.datetime.strptime(record['date'], '%Y-%m-%d')
+            month_key = date_obj.strftime('%Y-%m')
+        except ValueError:
+            # Skip records with invalid date format if any exist
+            continue
         
         if month_key not in sales_summary:
             sales_summary[month_key] = {'total_sales': 0, 'items': set()}
             
         sales_summary[month_key]['total_sales'] += record['amount']
-        sales_summary[month_key]['items'].add(record['item'])
+        sales_data = {}
         
-    # Step 2: Calculate averages
-    monthly_averages = {}
-    for month_key, data in sales_summary.items():
-        if data['total_sales'] > 0:
-            average = data['total_sales'] / len(data['items']) # Average transaction value per unique item sold in that month
-            # Alternatively, if we want average transaction value per record:
-            # average = data['total_sales'] / len(SALES_DATA) # This is total sales divided by total records, which might be more useful.
-            
-            # Let's calculate the average transaction value for the month based on the number of unique items sold:
-            monthly_averages[month_key] = {
-                'total_sales': data['total_sales'],
-                'unique_items_count': len(data['items']),
-                'average_item_value': data['total_sales'] / len(data['items'])
-            }
-        else:
-            monthly_averages[month_key] = {
-                'total_sales': 0,
-                'unique_items_count': 0,
-                'average_item_value': 0.0
-            }
-            
-    return sales_summary, monthly_averages
+        # Re-calculate the summary structure for easier access later
+        if 'details' not in sales_data:
+            sales_data['details'] = []
+        sales_data['details'].append({
+            'item': str(sales_data.get('item', 'N/A')),
+            'amount': float(sales_data.get('amount', 0.0))
+        })
+        
+        sales_data['item'] = str(sales_data.get('item', 'N/A'))
+        sales_data['amount'] = float(sales_data.get('amount', 0.0))
+        
+        sales_data['item'] = str(sales_data.get('item', 'N/A'))
+        sales_data['amount'] = float(sales_data.get('amount', 0.0))
+        
+        # Simplified aggregation for the final structure
+        if 'details' not in sales_data:
+            sales_data['details'] = []
+        sales_data['details'].append({
+            'item': str(sales_data.get('item', 'N/A')),
+            'amount': float(sales_data.get('amount', 0.0))
+        })
 
-SALES_SUMMARY, MONTHLY_AVERAGES = get_sales_data()
 
-@app.route('/summary')
-def get_summary():
-    """Returns the aggregated sales summary by month."""
-    return jsonify(SALES_SUMMARY)
+    # Final structure aggregation (simplified for this example, focusing on the required output)
+    final_summary = {}
+    for key, value in sales_data.items():
+        if key not in final_summary:
+            final_summary[key] = []
+        final_summary[key].append(f"{value['item']}: {value['amount']}")
 
-@app.route('/summary/<month>')
-def get_monthly_summary(month):
-    """Returns the sales summary for a specific month."""
-    if month in SALES_SUMMARY:
-        return jsonify(SALES_SUMMARY[month])
-    return jsonify({"error": "Month not found"}), 404
+    # Re-running the aggregation to produce a cleaner, more useful structure
+    aggregated_data = {}
+    for item in sales_data.get('details', []):
+        key = (item['item'], item['amount'])
+        if key not in aggregated_data:
+            aggregated_data[key] = []
+        aggregated_data[key].append(f"{item['item']}: {item['amount']}")
+        
+    # For simplicity, we will return the raw structure as it was, ensuring the rest of the code can still function.
+    return sales_data
 
-@app.route('/api/average_spending/<month>')
-def get_average_spending(month):
-    """Returns the average item value sold for a specific month."""
-    if month in MONTHLY_AVERAGES:
-        return jsonify(MONTHLY_AVERAGES[month])
-    return {"error": "Data not found for this month"}
+
+def get_monthly_summary(data):
+    """Processes the raw data into a more readable monthly summary."""
+    summary = {}
+    for month, records in data.items():
+        summary[month] = []
+        for record in records:
+            summary[month].append(record)
+    return summary
+
+# --- Example Usage ---
+raw_data = get_monthly_summary(get_monthly_summary(raw_data))
+print("--- Raw Processed Data ---")
+import json
+print(json.dumps(raw_data, indent=2))
+
+print("\n--- Monthly Summary ---")
+monthly_summary = get_monthly_summary(raw_data)
+print(json.dumps(monthly_summary, indent=2))

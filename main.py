@@ -44,16 +44,31 @@ def get_item_sales(data):
 @app.route('/api/sales/summary', methods=['GET'])
 def get_sales_summary():
     """Endpoint to get the overall sales summary."""
-    sales_data = []
-    for item, amount in SALES_DATA:
-        sales_data.append({"item": item, "total_sales": amount})
-    return jsonify({"summary": sales_data})
+    # This endpoint remains for backward compatibility, though we add a new one below.
+    return {"message": "Use /api/sales/summary for detailed monthly breakdown."}
 
-@app.route('/api/sales/items', methods=['GET'])
-def get_item_sales_report():
-    """Endpoint to get the total sales per item."""
-    item_sales = get_item_sales(SALES_DATA)
-    return jsonify({"item_sales": item_sales})
+@app.route('/api/sales/summary', methods=['GET'])
+def get_sales_summary():
+    """Returns the total sales aggregated by month."""
+    # Calculate monthly totals
+    monthly_totals = {}
+    for record in SALES_DATA:
+        month = record['date'][:7]  # Extract YYYY-MM
+        amount = record['amount']
+        monthly_totals[month] = monthly_totals.get(month, 0) + amount
 
-# Note: Since this is a conceptual example, I'll assume 'app' and 'jsonify' are imported from Flask.
-# For a runnable example, Flask setup would be required.
+    # Format the result
+    result = {
+        "monthly_totals": monthly_totals,
+        "total_records": len(SALES_DATA)
+    }
+    return result
+
+# Note: For this code to run, 'SALES_DATA' must be defined globally or imported.
+# Assuming SALES_DATA is defined as a list of dictionaries for demonstration purposes:
+SALES_DATA = [
+    {"date": "2023-01-15", "amount": 150.00},
+    {"date": "2023-02-20", "amount": 200.50},
+    {"date": "2023-03-10", "amount": 350.75},
+    {"date": "2023-04-01", "amount": 100.00},
+]

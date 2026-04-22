@@ -40,3 +40,6 @@ Python runtime state: preinitializing
 Fatal Python error: preconfig_init_utf8_mode: invalid PYTHONUTF8 environment variable value
 Python runtime state: preinitializing
 
+Fatal Python error: preconfig_init_utf8_mode: invalid PYTHONUTF8 environment variable value
+Python runtime state: preinitializing
+

@@ -16,82 +16,53 @@ SALES_DATA = [
     {"date": "2023-02-15", "amount": 75, "item": "Mouse"},
 ]
 
-def get_sales_data():
-    """Processes raw sales data into structured summaries, including monthly averages."""
-    sales_summary = {}
+def process_sales_data():
+    """
+    Processes raw sales data into a structured summary, calculating monthly totals and averages.
+    """
+    monthly_totals = defaultdict(float)
+    monthly_item_counts = defaultdict(lambda: defaultdict(int))
     
-    # Step 1: Aggregate totals and items per month
     for record in SALES_DATA:
         try:
-            date_obj = datetime.datetime.strptime(record['date'], '%Y-%m-%d')
+            date_obj = datetime.strptime(record['date'], '%Y-%m-%d')
             month_key = date_obj.strftime('%Y-%m')
-        except ValueError:
-            # Skip records with invalid date format if any exist
-            continue
-        
-        if month_key not in sales_summary:
-            sales_summary[month_key] = {'total_sales': 0, 'items': set()}
+            amount = float(record['amount'])
+            item = str(record['item'])
             
-        sales_summary[month_key]['total_sales'] += record['amount']
-        sales_data = {}
-        
-        # Re-calculate the summary structure for easier access later
-        if 'details' not in sales_data:
-            sales_data['details'] = []
-        sales_data['details'].append({
-            'item': str(sales_data.get('item', 'N/A')),
-            'amount': float(sales_data.get('amount', 0.0))
-        })
-        
-        sales_data['item'] = str(sales_data.get('item', 'N/A'))
-        sales_data['amount'] = float(sales_data.get('amount', 0.0))
-        
-        sales_data['item'] = str(sales_data.get('item', 'N/A'))
-        sales_data['amount'] = float(sales_data.get('amount', 0.0))
-        
-        # Simplified aggregation for the final structure
-        if 'details' not in sales_data:
-            sales_data['details'] = []
-        sales_data['details'].append({
-            'item': str(sales_data.get('item', 'N/A')),
-            'amount': float(sales_data.get('amount', 0.0))
-        })
+            monthly_totals[month_key] += amount
+            monthly_item_counts[month_key][item] += 1
+            
+        except (ValueError, KeyError) as e:
+            # Log or handle records with invalid data silently
+            continue
+            
+    monthly_averages = {}
+    for month, total in monthly_totals.items():
+        # Calculate the number of distinct transactions for this month
+        # Since SALES_DATA is flat, we count the number of entries per month for simplicity of average calculation
+        transaction_count = sum(monthly_item_counts[month].values())
+        if transaction_count > 0:
+            monthly_averages[month] = total / transaction_count
+        else:
+            monthly_averages[month] = 0.0
+
+    return monthly_averages
 
 
-    # Final structure aggregation (simplified for this example, focusing on the required output)
-    final_summary = {}
-    for key, value in sales_data.items():
-        if key not in final_summary:
-            final_summary[key] = []
-        final_summary[key].append(f"{value['item']}: {value['amount']}")
+@app.route('/api/monthly_averages', methods=['GET'])
+def get_monthly_averages():
+    """
+    New endpoint to retrieve the average spending for each month.
+    """
+    monthly_averages = process_sales_data()
+    return jsonify({
+        "message": "Monthly average sales calculated successfully",
+        "averages": monthly_averages
+    })
 
-    # Re-running the aggregation to produce a cleaner, more useful structure
-    aggregated_data = {}
-    for item in sales_data.get('details', []):
-        key = (item['item'], item['amount'])
-        if key not in aggregated_data:
-            aggregated_data[key] = []
-        aggregated_data[key].append(f"{item['item']}: {item['amount']}")
-        
-    # For simplicity, we will return the raw structure as it was, ensuring the rest of the code can still function.
-    return sales_data
-
-
-def get_monthly_summary(data):
-    """Processes the raw data into a more readable monthly summary."""
-    summary = {}
-    for month, records in data.items():
-        summary[month] = []
-        for record in records:
-            summary[month].append(record)
-    return summary
-
-# --- Example Usage ---
-raw_data = get_monthly_summary(get_monthly_summary(raw_data))
-print("--- Raw Processed Data ---")
-import json
-print(json.dumps(raw_data, indent=2))
-
-print("\n--- Monthly Summary ---")
-monthly_summary = get_monthly_summary(raw_data)
-print(json.dumps(monthly_summary, indent=2))
+if __name__ == '__main__':
+    # In a real application, you would run this with a proper WSGI server.
+    # For demonstration, we just show how the endpoint would be accessed.
+    print("Run the application to test the endpoint (e.g., using Flask/Django setup).")
+    # To run this standalone for testing purposes, you would typically use a framework.

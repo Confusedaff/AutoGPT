@@ -24,84 +24,51 @@ SALES_DATA = [
 CACHED_AVERAGES = None
 CACHE_EXPIRY = 3600  # Cache results for 1 hour
 
-def process_sales_data():
-    """
-    Processes raw sales data into a structured summary, calculating monthly totals and averages.
-    """
-    monthly_totals = defaultdict(float)
-    monthly_item_counts = defaultdict(lambda: defaultdict(int))
-    
-    for record in SALES_DATA:
+def calculate_monthly_averages(data):
+    """Calculates the average transaction value per month."""
+    monthly_totals = {}
+    monthly_counts = {}
+
+    for record in data:
+        # Assuming 'date' is in a format that allows easy month extraction (e.g., YYYY-MM-DD)
         try:
-            date_obj = datetime.strptime(record['date'], '%Y-%m-%d')
+            date_obj = datetime.datetime.strptime(record['date'], '%Y-%m-%d')
             month_key = date_obj.strftime('%Y-%m')
-            amount = float(record['amount'])
-            item = str(record['item'])
-            
-            monthly_totals[month_key] += amount
-            monthly_item_counts[month_key][item] += 1
-            
-        except (ValueError, KeyError, TypeError) as e:
-            # Robust error handling: skip records with invalid data
-            print(f"Skipping invalid record: {record}. Error: {e}")
+            amount = record['amount']
+
+            monthly_totals[month_key] = monthly_totals.get(month_key, 0) + amount
+            monthly_counts[month_key] = monthly_counts.get(month_key, 0) + 1
+        except (ValueError, KeyError) as e:
+            # Handle malformed data gracefully
+            print(f"Skipping record due to error: {e}")
             continue
-            
+
     monthly_averages = {}
     for month, total in monthly_totals.items():
-        # Calculate the number of distinct transactions for this month
-        transaction_count = sum(monthly_item_counts[month].values())
-        if transaction_count > 0:
-            monthly_averages[month] = total / transaction_count
-        else:
-            monthly_averages[month] = 0.0
+        count = monthly_counts[month]
+        monthly_averages[month] = round(total / count, 2)
 
     return monthly_averages
 
-def process_item_summary():
-    """
-    Processes raw sales data to calculate total sales and transaction counts per item.
-    """
-    item_summary = defaultdict(lambda: {'total_sales': 0.0, 'count': 0})
-    
-    for record in self.data:
-        item = record['item']
-        amount = record['amount']
-        item_key = f"{item} ({record['date']})"
-        
-        item_data = item_data.setdefault(item_key, {'sales': 0.0, 'count': 0})
-        item_data['sales'] += amount
-        item_data['count'] += 1
-        
-    return item_data
+from datetime import datetime
 
-# Initialize data structure (assuming this would be initialized in a real Flask context)
-class DataProcessor:
-    def __init__(self):
-        self.data = [
-            {'item': 'Laptop', 'amount': 1200.00, 'date': '2023-01-15'},
-            {'item': 'Mouse', 'amount': 25.50, 'date': '2023-01-16'},
-            {'item': 'Laptop', 'amount': 1500.00, 'date': '2023-02-01'},
-            {'item': 'Keyboard', 'amount': 75.00, 'date': '2023-02-10'},
-        ]
+@app.route('/api/monthly_averages', methods=['GET'])
+def get_monthly_averages():
+    """Endpoint to retrieve calculated monthly averages."""
+    if not data:
+        return jsonify({"error": "No data available"}), 404
 
-    def get_item_summary(self):
-        # Re-implementing the logic here for a standalone runnable example
-        item_data = {}
-        for record in self.data:
-            item = record['item']
-            amount = record['amount']
-            item_key = f"{item} ({record['date']})"
-            
-            if item_key not in item_data:
-                item_data[item_key] = {'sales': 0.0, 'count': 0}
-            
-            item_data[item_key]['sales'] += amount
-            item_data[item_key]['count'] += 1
-        return item_data
+    averages = calculate_monthly_averages(data)
+    return jsonify({"monthly_averages": averages})
 
-# Example usage:
-processor = DataProcessor()
-item_summary = processor.get_item_summary()
-print("--- Item Summary ---")
-for key, data in item_summary.items():
-    print(f"{key}: Sales=${data['sales']:.2f}, Count={data['count']}")
+# Placeholder for Flask app setup (required for the routes to function)
+from flask import Flask, jsonify
+
+app = Flask(__name__)
+
+# Example of how to run (for testing purposes)
+if __name__ == '__main__':
+    # In a real application, you would run this with a proper WSGI server
+    # For this example, we just define the structure.
+    print("Flask app initialized. Run with a proper server to test endpoints.")
+    # app.run(debug=True)

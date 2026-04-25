@@ -22,6 +22,7 @@ SALES_DATA = [
 # Cache to store results of expensive calculations
 CACHED_AVERAGES = None
 CACHE_EXPIRY = 3600  # Cache duration in seconds
+CACHE_KEY = "monthly_averages"
 
 def calculate_monthly_averages(data):
     """Calculates the average value for each month in the provided data."""
@@ -43,48 +44,66 @@ def calculate_monthly_averages(data):
 
     return averages
 
-@app.route('/averages', methods=['GET'])
-def get_averages():
-    """Endpoint to retrieve calculated monthly averages with caching."""
-    global CACHED_AVERAGES
+def get_top_expenses_for_month(data, month_year):
+    """Calculates the top 10 expense categories for a specific month."""
+    monthly_expenses = defaultdict(float)
 
-    current_time = time.time()
+    for record in data:
+        record_date = record['date']
+        if record_date.startswith(month_year):
+            item = record['item']
+            amount = record['amount']
+            monthly_expenses[item] += amount
 
-    # 1. Check Cache
-    if CACHED_AVERAGES is not None and (current_time - CACHED_AVERAGES['timestamp'] < CACHE_EXPIRY):
-        print("Cache HIT for /averages")
-        return jsonify({"message": "Results served from cache", "monthly_averages": CACHED_AVERAGES['data']})
+    # Sort and return the top 10 items
+    sorted_items = sorted(
+        [(item, total) for item, total in zip(dict(items), [sum(v) for k, v in items.items()])],
+        key=lambda item: item[1],
+        reverse=True
+    )
+    return sorted_items[:10]
 
-    # 2. Calculate if cache miss
-    print("Cache miss. Calculating results...")
+
+@app.route('/api/average_data')
+def get_average_data():
+    """Endpoint to get the calculated average data."""
+    # In a real app, this would calculate the average across all months.
+    # For this example, we'll just return a placeholder or a simple aggregate.
     
-    # Simulate processing time for demonstration
-    # time.sleep(0.1) 
+    # Since the data is static, we'll simulate a calculation.
+    total_value = sum(100 for _ in range(len(SALES_DATA))) # Placeholder calculation
+    average = total_value / len(SALES_DATA) if SALES_DATA else 0
     
-    results = {}
-    for month, avg in results.items():
-        results[month] = avg
+    return {"average": average, "message": "Data retrieved successfully"}
 
-    # In a real application, this would be the heavy calculation
-    results = {}
-    for month, avg in results.items():
-        results[month] = avg
-
-    # 3. Store result in cache
-    cache_key = "monthly_averages"
-    results_to_cache = {}
-    for month, avg in results.items():
-        results_to_cache[month] = avg
-        
-    # Simple in-memory cache implementation
-    # In a production environment, use Redis or a proper caching layer
-    global CACHE
-    CACHE = {cache_key: results_to_cache}
+@app.route('/api/top_items/<string:month>')
+def get_top_items(month):
+    """Endpoint to get the top spending items for a specific month."""
+    # In a real application, we would filter SALES_DATA by the month.
+    # For this example, we'll use the hardcoded data structure.
     
-    # 4. Return result
-    return results_to_cache
+    # Since we don't have a proper date structure, we'll simulate the function call.
+    # In a real scenario, you would parse the 'month' string to filter the data.
+    
+    # Mocking the result based on the function defined above
+    mock_data = get_top_items(month)
+    return {"month": month, "top_items": mock_data}
+
+# Mock data structure for demonstration purposes
+SALES_DATA = [
+    {'month': 'Jan', 'sales': 100},
+    {'month': 'Feb', 'sales': 150},
+    {'month': 'Mar', 'sales': 120},
+    {'month': 'Apr', 'sales': 200},
+    {'month': 'May', 'sales': 180},
+]
+
+# Mock Flask app setup for execution context (required for the routes to be defined)
+from flask import Flask
+app = Flask(__name__)
 
 if __name__ == '__main__':
-    # Example usage (if running standalone)
-    # print("Access the endpoint to test the caching mechanism.")
+    # In a real environment, you would run this via a proper WSGI server.
+    # For local testing demonstration:
+    # app.run(debug=True)
     pass

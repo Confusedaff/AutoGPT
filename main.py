@@ -14,6 +14,9 @@ SALES_DATA = [
     {"date": "2023-01-10", "amount": 200, "item": "Keyboard"},
     {"date": "2023-02-01", "amount": 150, "item": "Monitor"},
     {"date": "2023-02-15", "amount": 75, "item": "Mouse"},
+    {"date": "2023-03-01", "amount": 300, "item": "Laptop"},
+    {"date": "2023-03-15", "amount": 100, "item": "Monitor"},
+    {"date": "2023-03-20", "amount": 50, "item": "Mouse"},
 ]
 
 # --- Caching Mechanism ---
@@ -38,8 +41,9 @@ def process_sales_data():
             monthly_totals[month_key] += amount
             monthly_item_counts[month_key][item] += 1
             
-        except (ValueError, KeyError) as e:
-            # Log or handle records with invalid data silently
+        except (ValueError, KeyError, TypeError) as e:
+            # Robust error handling: skip records with invalid data
+            print(f"Skipping invalid record: {record}. Error: {e}")
             continue
             
     monthly_averages = {}
@@ -53,38 +57,51 @@ def process_sales_data():
 
     return monthly_averages
 
-
-@app.route('/api/monthly_averages', methods=['GET'])
-def get_monthly_averages():
+def process_item_summary():
     """
-    Retrieves the average spending for each month, utilizing caching for performance.
+    Processes raw sales data to calculate total sales and transaction counts per item.
     """
-    global CACHED_AVERAGES
-    current_time = time.time()
-
-    # Check cache validity
-    if CACHED_AVERAGES is not None and (current_time - CACHED_AVERAGES['timestamp']) < CACHE_EXPIRY:
-        print("Serving monthly averages from cache.")
-        return jsonify({
-            "message": "Monthly average sales retrieved from cache",
-            "averages": CACHED_AVERAGES['data']
-        })
-
-    print("Recalculating monthly averages...")
-    monthly_averages = process_sales_data()
+    item_summary = defaultdict(lambda: {'total_sales': 0.0, 'count': 0})
     
-    # Update cache
-    CACHED_AVERAGES = {
-        'data': monthly_averages,
-        'timestamp': current_time
-    }
+    for record in self.data:
+        item = record['item']
+        amount = record['amount']
+        item_key = f"{item} ({record['date']})"
+        
+        item_data = item_data.setdefault(item_key, {'sales': 0.0, 'count': 0})
+        item_data['sales'] += amount
+        item_data['count'] += 1
+        
+    return item_data
 
-    return jsonify({
-        "message": "Monthly average sales calculated successfully",
-        "averages": monthly_averages
-    })
+# Initialize data structure (assuming this would be initialized in a real Flask context)
+class DataProcessor:
+    def __init__(self):
+        self.data = [
+            {'item': 'Laptop', 'amount': 1200.00, 'date': '2023-01-15'},
+            {'item': 'Mouse', 'amount': 25.50, 'date': '2023-01-16'},
+            {'item': 'Laptop', 'amount': 1500.00, 'date': '2023-02-01'},
+            {'item': 'Keyboard', 'amount': 75.00, 'date': '2023-02-10'},
+        ]
 
-if __name__ == '__main__':
-    # In a real application, you would run this with a proper WSGI server.
-    print("Run the application to test the endpoint (e.g., using Flask/Django setup).")
-    # To run this standalone for testing purposes, you would typically use a framework.
+    def get_item_summary(self):
+        # Re-implementing the logic here for a standalone runnable example
+        item_data = {}
+        for record in self.data:
+            item = record['item']
+            amount = record['amount']
+            item_key = f"{item} ({record['date']})"
+            
+            if item_key not in item_data:
+                item_data[item_key] = {'sales': 0.0, 'count': 0}
+            
+            item_data[item_key]['sales'] += amount
+            item_data[item_key]['count'] += 1
+        return item_data
+
+# Example usage:
+processor = DataProcessor()
+item_summary = processor.get_item_summary()
+print("--- Item Summary ---")
+for key, data in item_summary.items():
+    print(f"{key}: Sales=${data['sales']:.2f}, Count={data['count']}")

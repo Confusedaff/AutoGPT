@@ -25,16 +25,16 @@ CACHE_EXPIRY = 3600  # Cache duration in seconds
 
 def calculate_monthly_averages(data):
     """Calculates the average value for each month in the provided data."""
-    monthly_totals = {}
-    monthly_counts = {}
+    monthly_totals = defaultdict(float)
+    monthly_counts = defaultdict(int)
 
     for record in data:
         # Assuming the date format is YYYY-MM-DD
         month = record['date'][:7]  # Extract YYYY-MM
         value = record['amount']
 
-        monthly_totals[month] = monthly_totals.get(month, 0) + value
-        monthly_counts[month] = monthly_counts.get(month, 0) + 1
+        monthly_totals[month] += value
+        monthly_counts[month] += 1
 
     averages = {}
     for month, total in monthly_totals.items():
@@ -45,28 +45,46 @@ def calculate_monthly_averages(data):
 
 @app.route('/averages', methods=['GET'])
 def get_averages():
-    """Endpoint to retrieve calculated monthly averages."""
-    if not SALES_DATA:
-        return {"error": "No sales data available"}, 404
+    """Endpoint to retrieve calculated monthly averages with caching."""
+    global CACHED_AVERAGES
 
-    monthly_averages = calculate_monthly_averages(SALES_DATA)
-    return {"monthly_averages": monthly_averages}
+    current_time = time.time()
 
-# Mock setup for Flask context (assuming this is run within a Flask environment)
-# If running standalone, you would need to import Flask and define the data source.
-# For this example, we simulate the necessary context:
-from flask import Flask
-app = Flask(__name__)
-SALES_DATA = [
-    {'date': '2023-01-15', 'amount': 100.50},
-    {'date': '2023-01-20', 'amount': 150.25},
-    {'date': '2023-02-10', 'amount': 200.00},
-    {'date': '2023-02-25', 'amount': 120.00},
-    {'date': '2023-03-05', 'amount': 300.50},
-    {'date': '2023-03-15', 'amount': 100.00},
-]
+    # 1. Check Cache
+    if CACHED_AVERAGES is not None and (current_time - CACHED_AVERAGES['timestamp'] < CACHE_EXPIRY):
+        print("Cache HIT for /averages")
+        return jsonify({"message": "Results served from cache", "monthly_averages": CACHED_AVERAGES['data']})
+
+    # 2. Calculate if cache miss
+    print("Cache miss. Calculating results...")
+    
+    # Simulate processing time for demonstration
+    # time.sleep(0.1) 
+    
+    results = {}
+    for month, avg in results.items():
+        results[month] = avg
+
+    # In a real application, this would be the heavy calculation
+    results = {}
+    for month, avg in results.items():
+        results[month] = avg
+
+    # 3. Store result in cache
+    cache_key = "monthly_averages"
+    results_to_cache = {}
+    for month, avg in results.items():
+        results_to_cache[month] = avg
+        
+    # Simple in-memory cache implementation
+    # In a production environment, use Redis or a proper caching layer
+    global CACHE
+    CACHE = {cache_key: results_to_cache}
+    
+    # 4. Return result
+    return results_to_cache
 
 if __name__ == '__main__':
-    # In a real application, you would run the Flask app.
-    # For demonstration purposes, we just show the structure.
+    # Example usage (if running standalone)
+    # print("Access the endpoint to test the caching mechanism.")
     pass

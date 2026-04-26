@@ -17,7 +17,7 @@ def initialize_db():
     """Initializes the database table if it does not exist."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    # Table structure remains the same
+    # Use a consistent table name and structure for time-series data
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS data_points (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -29,75 +29,68 @@ def initialize_db():
     conn.commit()
     conn.close()
 
-# Initialize the database upon application startup (optional but good practice for setup)
+# Initialize the database upon application startup
 with app.app_context():
-    # Ensure the database file exists or is ready if needed, though for simple SQLite it often just creates it on first write.
-    pass
-
+    initialize_db()
 
 @app.route('/data')
 def get_data():
-    """Endpoint to retrieve all data (example usage)."""
+    """Endpoint to retrieve all data, utilizing caching."""
+    # Check cache first
+    if 'all_data' in data_cache:
+        return jsonify(data_cache['all_data'])
+
     with app.app_context():
-        conn = sqlite3.connect('data.db')
+        conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM data")
+        # Query the unified table name
+        cursor.execute("SELECT * FROM data_points")
         data = cursor.fetchall()
         conn.close()
-        return jsonify(data)
+
+        # Store result in cache
+        data_cache['all_data'] = [dict(row) for row in data]
+        return jsonify(data_cache['all_data'])
 
 @app.route('/data/<category>')
 def get_data_by_category(category):
     """Endpoint to retrieve data filtered by category."""
-    with app.app_context():
+    # Input validation: Ensure category is provided and is a string
+    if not category or not isinstance(category, str):
+        return jsonify({"error": "Missing or invalid category parameter"}), 400
+
+    query = "SELECT * FROM data_points WHERE category = ?"
+    conn = None
+    try:
         conn = sqlite3.connect('data.db')
         cursor = conn.cursor()
-        # Filter data by the category parameter
-        cursor.execute("SELECT * FROM data WHERE category = ?", (category,))
-        data = cursor.fetchall()
-        conn.close()
-        if not data:
-            return jsonify({"message": f"No data found for category: {category}"}), 404
+        cursor.execute(query, (category,))
+        results = cursor.fetchall()
+        
+        # Re-fetch data to ensure consistency if the previous query logic was complex, 
+        # but for simplicity here, we rely on the structure.
+        
+        # Since we are using raw SQL execution, we fetch the results directly.
+        
+        # Note: For this to work, the data must be in the 'data.db' file.
+        # Assuming the data structure is: (id, value, category)
+        
+        # Re-executing the query to get the actual results:
+        cursor.execute(query, (category,))
+        results = cursor.fetchall()
+
+
+        # Convert results to a list of dictionaries for JSON response
+        columns = [desc[0] for desc in cursor.description]
+        data = [dict(zip(columns, row)) for row in results]
+        
         return jsonify(data)
 
-# Example of how to run this (requires Flask setup)
-if __name__ == '__main__':
-    import sqlite3
-    from flask import Flask, jsonify
-    app = Flask(__name__)
-
-    @app.route('/data')
-    def get_data():
-        with app.app_context():
-            conn = sqlite3.connect('data.db')
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM data")
-            data = cursor.fetchall()
+    except sqlite3.Error as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn:
             conn.close()
-            return jsonify(data)
 
-    @app.route('/data/<category>')
-    def get_data_by_category(category):
-        with app.app_context():
-            conn = sqlite3.connect('data.db')
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM data WHERE category = ?", (category,))
-            data = cursor.fetchall()
-            conn.close()
-            if not data:
-                return jsonify({"message": f"No data found for category: {category}"}), 404
-            return jsonify(data)
-
-    # Setup dummy data for testing
-    with app.app_context():
-        conn = sqlite3.connect('data.db')
-        cursor = conn.cursor()
-        cursor.execute("CREATE TABLE IF NOT EXISTS data (id INTEGER PRIMARY KEY, name TEXT, category TEXT)")
-        cursor.execute("INSERT OR IGNORE INTO data (id, name, category) VALUES (1, 'Item A', 'Electronics')")
-        cursor.execute("INSERT OR IGNORE INTO data (id, name, category) VALUES (2, 'Item B', 'Books')")
-        cursor.execute("INSERT OR IGNORE INTO data (id, name, category) VALUES (3, 'Item C', 'Electronics')")
-        conn.commit()
-        conn.close()
-
-
-    app.run(debug=True)
+# Note: To make this runnable, you would need to ensure the database file ('data.db') 
+# exists and contains the 'data_points' table.

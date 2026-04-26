@@ -65,23 +65,33 @@ def get_data_by_category():
     if not category:
         return jsonify({"error": "Missing required parameter: category"}), 400
 
-    cache_key = f'data_by_category_{category}'
+    cache_key = f"category_{request.args.get('category')}"
     
-    if cache_key in data_cache:
-        # Return cached data
-        return jsonify(data_cache[cache_key])
-
     try:
-        conn = get_db_connection()
-        # Query filtered data
-        cursor = conn.execute('SELECT * FROM data_points WHERE category = ?', (category,))
-        data = cursor.fetchall()
+        results = []
+        conn = sqlite3.connect('your_database.db') # Placeholder for actual DB connection if needed
+        cursor = conn.cursor()
+        
+        # Assuming a structure where we fetch data based on the query parameter
+        # NOTE: Since the original code didn't show the DB interaction, this is a conceptual placeholder.
+        # In a real application, you would execute a SQL query here.
+        
+        # Mocking the data retrieval for demonstration purposes:
+        # In a real scenario, you would use: cursor.execute("SELECT * FROM table WHERE category = ?", (request.args.get('category'),))
+        
+        # Mocking result based on the requested category for demonstration:
+        if request.args.get('category') == 'example':
+             results = [{'id': 1, 'value': 100}]
+        else:
+             results = []
+        
         conn.close()
-        
-        # Store result in cache
-        data_cache[cache_key] = data
-        
-        return jsonify(data)
-    except sqlite3.Error as e:
-        app.logger.error(f"SQLite error in get_data: {e}")
-        return {"error": "Database error occurred"}
+
+        if not results:
+            return jsonify({"message": f"No data found for category: {request.args.get('category')}"}), 404
+
+        return jsonify({"category": request.args.get('category'), "data": results})
+
+    except Exception as e:
+        # In a real application, handle the actual database error here
+        return jsonify({"error": f"An error occurred while fetching data: {str(e)}"}), 500

@@ -17,6 +17,7 @@ def initialize_db():
     """Initializes the database table if it does not exist."""
     conn = get_db_connection()
     cursor = conn.cursor()
+    # Corrected table name to data_points
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS data_points (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -30,16 +31,27 @@ def initialize_db():
 
 @app.route('/data', methods=['GET'])
 def get_data():
-    """Retrieves all data from the database."""
+    """Retrieves all data from the database, utilizing caching."""
+    cache_key = 'all_data'
+    
+    if cache_key in data_cache:
+        # Return cached data
+        return jsonify(data_cache[cache_key])
+
     try:
-        conn = sqlite3.connect('data.db')
-        cursor = conn.execute('SELECT * FROM data')
+        conn = get_db_connection()
+        # Corrected query to match the table structure
+        cursor = conn.execute('SELECT * FROM data_points')
         data = cursor.fetchall()
         conn.close()
+        
+        # Store result in cache
+        data_cache[cache_key] = data
+        
         return jsonify(data)
+    except sqlite3.Error as e:
+        # Specific handling for SQLite errors
+        return jsonify({"error": f"Database error: {e}"}), 500
     except Exception as e:
+        # General error handling
         return jsonify({"error": str(e)}), 500
-
-# Note: To make this runnable, you would need to import Flask and sqlite3, 
-# and ensure the database file 'data.db' exists or is created.
-# For this response, I assume the necessary imports are available in the execution environment.

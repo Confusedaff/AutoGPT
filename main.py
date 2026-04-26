@@ -17,7 +17,7 @@ def initialize_db():
     """Initializes the database table if it does not exist."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    # Corrected table name to data_points
+    # Table structure remains the same
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS data_points (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,7 +40,6 @@ def get_data():
 
     try:
         conn = get_db_connection()
-        # Corrected query to match the table structure
         cursor = conn.execute('SELECT * FROM data_points')
         data = cursor.fetchall()
         conn.close()
@@ -51,7 +50,38 @@ def get_data():
         return jsonify(data)
     except sqlite3.Error as e:
         # Specific handling for SQLite errors
-        return jsonify({"error": f"Database error: {e}"}), 500
+        app.logger.error(f"SQLite error in get_data: {e}")
+        return jsonify({"error": "Database operation failed"}), 500
     except Exception as e:
         # General error handling
-        return jsonify({"error": str(e)}), 500
+        app.logger.error(f"General error in get_data: {e}")
+        return jsonify({"error": "An unexpected error occurred"}), 500
+
+@app.route('/data_by_category', methods=['GET'])
+def get_data_by_category():
+    """Retrieves data filtered by category, utilizing caching."""
+    category = request.args.get('category')
+    
+    if not category:
+        return jsonify({"error": "Missing required parameter: category"}), 400
+
+    cache_key = f'data_by_category_{category}'
+    
+    if cache_key in data_cache:
+        # Return cached data
+        return jsonify(data_cache[cache_key])
+
+    try:
+        conn = get_db_connection()
+        # Query filtered data
+        cursor = conn.execute('SELECT * FROM data_points WHERE category = ?', (category,))
+        data = cursor.fetchall()
+        conn.close()
+        
+        # Store result in cache
+        data_cache[cache_key] = data
+        
+        return jsonify(data)
+    except sqlite3.Error as e:
+        app.logger.error(f"SQLite error in get_data: {e}")
+        return {"error": "Database error occurred"}

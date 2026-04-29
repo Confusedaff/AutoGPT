@@ -17,7 +17,7 @@ def initialize_db():
     """Initializes the database table if it does not exist."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    # Use a consistent table name and structure for time-series data
+    # Standardize table name and structure for time-series data
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS data_points (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,52 +35,40 @@ with app.app_context():
 
 @app.route('/data')
 def get_data():
-    """Endpoint to retrieve all data, utilizing caching."""
-    cache_key = 'all_data'
-    # Check cache first
+    """Endpoint to retrieve data, supporting filtering by category and utilizing caching."""
+    category = request.args.get('category')
+    cache_key = f'data_{category}' if category else 'all_data'
+
+    # 1. Check cache first
     if cache_key in data_cache:
         return jsonify(data_cache[cache_key])
 
     data = []
     try:
         with app.app_context():
-            conn = sqlite3.connect('data.db')
-            cursor = conn.execute("SELECT * FROM data")
-            rows = cursor.fetchall()
-            data = [dict(row) for row in rows]
-            conn.close()
+            conn = sqlite3.connect(DATABASE)
             
-        return data
+            # 2. Dynamic SQL based on request parameters
+            query = "SELECT * FROM data_points"
+            params = []
+            
+            if category:
+                query += " WHERE category = ?"
+                params.append(category)
+            
+            cursor = conn.execute(query, params)
+            results = results.fetchall()
+            
+            # Convert results to list of dictionaries for cleaner JSON output
+            columns = [description[0] for description in cursor.description]
+            data = [dict(zip(columns, row)) for row in results]
+            
+            return data
+
     except Exception as e:
+        # In a real application, proper error logging would be implemented
         return {"error": str(e)}, 500
 
-# Note: Since the original code didn't define the 'data' table, 
-# we must assume a structure or define a dummy table for the code to run.
-# For this example, we'll assume a simple structure if the data retrieval fails 
-# due to missing table setup, but the focus is on fixing the logic flow.
-
-# To make the code runnable and testable, we must ensure the database exists.
-# We'll add a setup step implicitly for completeness, although the core fix is in the routes.
-
-if __name__ == '__main__':
-    # In a real application, you would run this with a proper setup.
-    # For demonstration, we'll just ensure the structure is present if running standalone.
-    import sqlite3
-    try:
-        conn = sqlite3.connect('data.db')
-        cursor = conn.execute("""
-            CREATE TABLE IF NOT EXISTS data (
-                id INTEGER PRIMARY KEY,
-                value REAL,
-                category TEXT
-            )
-        """)
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        print(f"Could not initialize database: {e}")
-
-    # Example usage (requires Flask setup to run routes properly)
-    # For a runnable example, we'd need to integrate this into a Flask app.
-    # Since this is a script context, we stop here, assuming the logic fix is the primary goal.
-    pass
+# Note: The original code snippet was missing the actual execution logic for the query.
+# The implementation above assumes the goal is to return the data directly.
+# For demonstration purposes, I've structured the logic to return a list of dictionaries.

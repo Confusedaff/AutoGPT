@@ -37,16 +37,19 @@ with app.app_context():
 def get_data():
     """Endpoint to retrieve data, supporting filtering by category and utilizing caching."""
     category = request.args.get('category')
-    cache_key = f'data_{category}' if category else 'all_data'
+    
+    # Determine cache key. Use a standardized format.
+    cache_key = category if category else 'all'
 
     # 1. Check cache first
     if cache_key in data_cache:
+        print(f"Cache hit for key: {cache_key}")
         return jsonify(data_cache[cache_key])
 
     data = []
     try:
         with app.app_context():
-            conn = sqlite3.connect(DATABASE)
+            conn = get_db_connection()
             
             # 2. Dynamic SQL based on request parameters
             query = "SELECT * FROM data_points"
@@ -57,18 +60,23 @@ def get_data():
                 params.append(category)
             
             cursor = conn.execute(query, params)
-            results = results.fetchall()
+            results = cursor.fetchall() # Corrected: results should be fetched from the cursor
             
             # Convert results to list of dictionaries for cleaner JSON output
             columns = [description[0] for description in cursor.description]
             data = [dict(zip(columns, row)) for row in results]
             
-            return data
+            # 3. Store result in cache before returning
+            data_cache[cache_key] = data
+            print(f"Cache miss. Stored result for key: {cache_key}")
+            
+            return jsonify(data)
 
+    except sqlite3.Error as e:
+        # Handle specific database errors
+        print(f"Database error: {e}")
+        return jsonify({"error": "Database operation failed"}), 500
     except Exception as e:
-        # In a real application, proper error logging would be implemented
-        return {"error": str(e)}, 500
-
-# Note: The original code snippet was missing the actual execution logic for the query.
-# The implementation above assumes the goal is to return the data directly.
-# For demonstration purposes, I've structured the logic to return a list of dictionaries.
+        # Handle other unexpected errors
+        print(f"Unexpected error: {e}")
+        return jsonify({"error": "An internal server error occurred"}), 500

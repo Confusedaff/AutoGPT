@@ -5,8 +5,6 @@ from datetime import datetime
 app = Flask(__name__)
 DATABASE = 'data.db'
 # In-memory cache for data retrieval results
-# Note: In a real application, this should be Redis or a persistent store.
-# We keep it here to demonstrate the pattern, acknowledging its thread-safety limitations.
 data_cache = {}
 
 def get_db_connection():
@@ -40,17 +38,19 @@ def get_data():
     """Endpoint to retrieve data, supporting filtering by category and utilizing caching."""
     category = request.args.get('category', '').strip()
     
-    # Input Validation: Ensure category is not empty or excessively long
+    # 1. Input Validation: Ensure category is valid.
     if not category:
         category_to_use = 'all'
     else:
-        # Sanitize category input (e.g., restrict characters if necessary, though SQLite handles this well)
+        # Simple sanitization: only allow alphanumeric and underscore for category names
+        if not all(c.isalnum() or c == '_' for c in category):
+            return jsonify({"error": "Invalid category format. Categories must be alphanumeric or use underscores."}), 400
         category_to_use = category
     
-    # Determine cache key. Use a standardized format.
+    # Determine cache key.
     cache_key = category_to_use
 
-    # 1. Check cache first
+    # 2. Check cache first
     if cache_key in data_cache:
         print(f"Cache hit for key: {cache_key}")
         return jsonify(data_cache[cache_key])
@@ -58,43 +58,28 @@ def get_data():
     data = []
     try:
         with app.app_context():
-            conn = get_connection()
-            query = f"SELECT * FROM data WHERE category = ?"
+            conn = get_db_connection()
+            
+            # SQL Query: Select data based on the validated category
+            query = "SELECT timestamp, value FROM data_points WHERE category = ?"
             cursor = conn.cursor()
-            cursor.execute(query, (f"'{data_category}'",)) # Assuming 'data_category' is the actual table name or structure
+            
+            # Execute query safely
+            cursor.execute(query, (category_to_use,))
             results = cursor.fetchall()
             
-            # NOTE: Since the original query structure was missing, I'm assuming a table named 'data' exists 
-            # and that the category column is named 'category'. Adjust the SQL based on actual schema if necessary.
-            # For this example, I'll assume the table is 'data' and the column is 'category'.
-            
-            # Re-executing with a more standard assumption for demonstration:
-            cursor.execute("SELECT * FROM data WHERE category = ?", (data_category,))
-            results = cursor.fetchall()
+            conn.close()
 
-
-            # Store results in cache before returning
-            data_category = data_category # Assuming this variable holds the requested category
-            
-            # Store results in cache before returning
-            data_to_cache = {data_category: results}
-            
-            # In a real application, you would use a proper cache mechanism (like Redis)
-            # For this simple example, we simulate caching the result based on the category requested.
-            
-            # Since the endpoint only returns data for one category, we cache that specific result.
+            # 3. Store results in cache if data was found
             if results:
-                data_to_cache[data_category] = results
-            
-            # Return the results
-            return {"category": data_category, "data": results}
+                data_to_cache = {"category": category_to_use, "data": [dict(row) for row in results]}
+                data_cache[cache_key] = data_to_cache
+                return jsonify(data_to_cache)
+            else:
+                # Return empty result if no data is found for the category
+                return jsonify({"category": category_to_use, "results": []}), 200
 
     except Exception as e:
         # Handle potential database errors
-        return {"error": str(e), "category": data_category}
-
-# Placeholder for the actual application structure context needed for the query to run
-# In a real Flask/SQLAlchemy app, 'data_category' would be derived from request parameters.
-# Since this is a standalone snippet, I'll assume the necessary context exists for the logic flow.
-# The original code snippet was incomplete regarding the database interaction details.
-# The logic flow above demonstrates the intent of caching the result.
+        print(f"Error fetching data: {e}")
+        return {"error": "Internal server error"}, 500

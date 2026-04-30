@@ -346,3 +346,6 @@ The endpoint was improved by refining caching logic and enhancing error handling
 
 ### 2026-04-30 19:38 -- BACKEND
 The endpoint was improved by implementing basic caching and enhancing error handling for database operations.
+
+### 2026-04-30 19:52 -- BACKEND
+Input validation and structured caching were implemented to enhance data retrieval reliability and performance.

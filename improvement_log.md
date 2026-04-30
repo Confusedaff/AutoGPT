@@ -343,3 +343,6 @@ Added a hover animation to the charts to improve user experience and provide a m
 
 ### 2026-04-30 18:50 -- BACKEND
 The endpoint was improved by refining caching logic and enhancing error handling for database operations.
+
+### 2026-04-30 19:38 -- BACKEND
+The endpoint was improved by implementing basic caching and enhancing error handling for database operations.

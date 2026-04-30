@@ -130,13 +130,14 @@ def _save_state(data: dict):
         print(f"  [warn] Could not save runner state: {e}")
 
 
-def pick_commit_count(budget_remaining: int) -> int:
+def pick_commit_count(budget_remaining: int = None) -> int:
     """
     Pick today's commit count using a biased random walk from yesterday's count.
     The count drifts +/-30-50 % of the previous value, with a nudge toward the
     middle of the range so it doesn't pin at the extremes.
 
-    Hard-capped by both MAX_COMMITS_PER_DAY and the remaining API budget.
+    budget_remaining: only passed (and enforced) when using Groq.
+                      None (default) means Ollama -- no budget cap applied.
     """
     state    = _load_state()
     prev     = state.get("last_commit_count", random.randint(1, 8))
@@ -149,10 +150,11 @@ def pick_commit_count(budget_remaining: int) -> int:
 
     count = max(MIN_COMMITS_PER_DAY, min(MAX_COMMITS_PER_DAY, raw))
 
-    # Never exceed what the API budget allows today
-    budget_cap = budget_remaining // CALLS_PER_COMMIT
-    count       = min(count, budget_cap)
-    count       = max(0, count)   # could be 0 if budget exhausted
+    # Only apply budget cap when using Groq
+    if budget_remaining is not None:
+        budget_cap = budget_remaining // CALLS_PER_COMMIT
+        count      = min(count, budget_cap)
+        count      = max(0, count)   # could be 0 if budget exhausted
 
     return count
 
@@ -201,7 +203,8 @@ def run_one_commit(commit_index: int, total: int) -> bool:
 
     try:
         changelogs = improve(IMPROVE_TARGET)
-        log_calls(CALLS_PER_COMMIT)
+        if os.getenv("LLM_PROVIDER", "ollama").lower() == "groq":
+            log_calls(CALLS_PER_COMMIT)
     except Exception as e:
         print(f"  [FATAL] Improver crashed: {e}")
         return False
@@ -236,14 +239,18 @@ def run_daily_batch(no_delay: bool = False):
     """
     Execute today's batch of commits spread across the 6-11:30 PM window.
     """
-    budget = remaining_budget()
-    print(f"\n  API budget remaining this month: {budget} calls")
+    using_groq = os.getenv("LLM_PROVIDER", "ollama").lower() == "groq"
 
-    commit_count = pick_commit_count(budget)
-
-    if commit_count == 0:
-        print("  (!) API budget exhausted for this month -- skipping today.")
-        return
+    if using_groq:
+        budget = remaining_budget()
+        print(f"\n  API budget remaining this month: {budget} calls")
+        commit_count = pick_commit_count(budget)
+        if commit_count == 0:
+            print("  (!) API budget exhausted for this month -- skipping today.")
+            return
+    else:
+        print(f"\n  Using local Ollama -- no API budget limits.")
+        commit_count = pick_commit_count(MAX_COMMITS_PER_DAY)
 
     print(f"  Today's commit target: {commit_count} commits")
 

@@ -41,14 +41,14 @@ BACKUP_DIR    = ".backups"
 #  LLM providers
 # ─────────────────────────────────────────────────────────────────────────────
 
-def ollama_chat(messages: list, max_tokens: int = 8192) -> str:
-    """Call local Ollama. No rate limits, no key needed."""
+def ollama_chat(messages: list) -> str:
+    """Call local Ollama. No rate limits, no key needed. No token cap applied."""
     import requests
     payload = {
         "model":    OLLAMA_MODEL,
         "messages": messages,
         "stream":   False,
-        "options":  {"num_predict": max_tokens, "temperature": 0.4},
+        "options":  {"temperature": 0.4},
     }
     try:
         resp = requests.post(OLLAMA_URL, json=payload, timeout=300)
@@ -93,17 +93,19 @@ def groq_chat(messages: list, max_tokens: int = 8192) -> str:
 
 
 def llm_chat(messages: list, max_tokens: int = 8192) -> str:
-    """Route to correct provider, fall back to Groq if Ollama fails."""
+    """Route to correct provider, fall back to Groq if Ollama fails.
+    max_tokens is only applied to Groq (API cost/rate control).
+    Ollama runs locally with no token cap."""
     if LLM_PROVIDER == "groq":
         print(f"  [llm] Groq ({GROQ_MODEL})")
         return groq_chat(messages, max_tokens)
     print(f"  [llm] Ollama ({OLLAMA_MODEL})")
     try:
-        return ollama_chat(messages, max_tokens)
+        return ollama_chat(messages)          # no max_tokens -- local, uncapped
     except RuntimeError as e:
         if GROQ_API_KEY:
             print(f"  [llm] Ollama failed ({e}) -- falling back to Groq")
-            return groq_chat(messages, max_tokens)
+            return groq_chat(messages, max_tokens)   # cap applies on Groq fallback
         raise
 
 

@@ -349,3 +349,6 @@ The endpoint was improved by implementing basic caching and enhancing error hand
 
 ### 2026-04-30 19:52 -- BACKEND
 Input validation and structured caching were implemented to enhance data retrieval reliability and performance.
+
+### 2026-04-30 22:18 -- BACKEND
+The endpoint now implements caching and supports distinct raw and statistical data retrieval modes.
